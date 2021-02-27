@@ -1,0 +1,14 @@
+{
+  "name": "yandex-speechkit-talk-recognition",
+  "version": "0.1.0",
+  "description": "Распознавание больших файлов разговоров через Yandex SpeechKit",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Stanislav Popov",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.21.1"
+  }
+}
