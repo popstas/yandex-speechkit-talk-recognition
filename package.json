@@ -4,11 +4,23 @@
   "description": "Распознавание больших файлов разговоров через Yandex SpeechKit",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "convert-to-ogg": "node convert-to-ogg.js",
+    "version": "npm run changelog && git add CHANGELOG.md",
+    "postversion": "git push && npm run release",
+    "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s -r 0",
+    "release": "conventional-github-releaser -p angular && npm publish" 
   },
   "author": "Stanislav Popov",
   "license": "ISC",
   "dependencies": {
-    "axios": "^0.21.1"
+    "aws-sdk": "^2.884.0",
+    "axios": "^0.21.1",
+    "colors": "^1.4.0",
+    "commander": "^7.2.0",
+    "ffmpeg": "0.0.4"
+  },
+  "bin": {
+    "yandex-stt": "index.js"
   }
 }
