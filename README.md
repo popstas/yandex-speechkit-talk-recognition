@@ -3,10 +3,10 @@
 [Распознавание длинных аудио](https://cloud.yandex.ru/docs/speechkit/stt/transcribation) - документация
 
 ### Что делает
-- 1. Конвертирует файл в OGG Opus
-- 2. Заливает файл на Yandex Object Storage
-- 3. Отправляет файл на распознавание
-- 4. Дожидается результата (проверка раз в 10 секунд)
+1. Конвертирует файл в OGG Opus
+2. Заливает файл на Yandex Object Storage
+3. Отправляет файл на распознавание
+4. Дожидается результата (проверка раз в 10 секунд)
 
 Данные сохраняет в `~/yandex-stt/`.
 
@@ -21,3 +21,6 @@ npm install -g yandex-speechkit-talk-recognition
 3. Запустить `yandex-stt --file <путь_к_файлу_с_голосом>`, создастся конфиг в `~/yandex-stt/config.js`.
 4. Заполнить конфиг
 5. Запускать `yandex-stt --file <path>` или yandex-stt --id abcde`
+
+### Стоимость
+Распознавание с низким приоритетом (deferred) стоит примерно 15 копеек/минута, грубо говоря, 10 руб/час. [Тарифы](https://cloud.yandex.ru/docs/speechkit/pricing#rules-stt-long).

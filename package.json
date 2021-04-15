@@ -16,9 +16,13 @@
   "dependencies": {
     "aws-sdk": "^2.884.0",
     "axios": "^0.21.1",
+    "body-parser": "^1.19.0",
     "colors": "^1.4.0",
     "commander": "^7.2.0",
-    "ffmpeg": "0.0.4"
+    "connect-busboy": "0.0.2",
+    "express": "^4.17.1",
+    "ffmpeg": "0.0.4",
+    "fs-extra": "^9.1.0"
   },
   "bin": {
     "yandex-stt": "index.js"
