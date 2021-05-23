@@ -19,7 +19,7 @@ async function start() {
   const options = program.opts();
 
   for (let filePath of filenames) {
-    const res = await actions.convertToOgg(filePath);
+    const res = await actions.processAudio(filePath, 'ogg');
     if (!res) continue;
 
     console.log('program.upload: ', options.upload);

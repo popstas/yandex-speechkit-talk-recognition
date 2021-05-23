@@ -9,10 +9,8 @@ const { program } = require('commander');
 axios.defaults.headers.common['Authorization'] = 'Api-Key ' + config.apiKey;
 
 // create data directory and config
-const homedir = require('os').homedir();
-const dataPath = `${homedir}/yandex-stt`;
-if (!fs.existsSync(dataPath)) fs.mkdirSync(`${homedir}/yandex-stt`);
-const configPath = `${dataPath}/config.js`
+if (!fs.existsSync(config.dataPath)) fs.mkdirSync(config.dataPath);
+const configPath = `${config.dataPath}/config.js`
 if (!fs.existsSync(configPath)) {
   fs.copyFileSync('./config.example.js', configPath);
   console.log(`Created default config in ${configPath}, fill it!`);

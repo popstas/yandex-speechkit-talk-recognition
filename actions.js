@@ -5,15 +5,12 @@ const AWS = require('aws-sdk');
 const axios = require('axios');
 const colors = require('colors');
 
-const homedir = require('os').homedir();
-const dataPath = `${homedir}/yandex-stt`;
+const audioType = config.audioType || 'ogg'; // ogg|pcm
+const audioExt = audioType == 'ogg' ? 'ogg' : 'wav';
 
-// const axios = require('axios');
-// axios.defaults.headers.common['Authorization'] = 'Api-Key ' + config.storageUploadKey;
+const opsPath = `${config.dataPath}/ops`;
 
-const opsPath = `${dataPath}/ops`;
-
-const oggSavePath = `${dataPath}/converted`;
+const audioSavePath = `${config.dataPath}/converted`;
 let aws;
 let inited = false;
 
@@ -30,18 +27,29 @@ function s3Init() {
   });
 }
 
-async function convertToOgg(filePath) {
+async function processAudio(filePath, audioType) {
+  if (!['ogg', 'pcm'].includes(audioType)) {
+    throw new Error('Only ogg and pcm types supported');
+  }
+
   // console.log('filePath: ', filePath);
-  try {
-    if (!fs.existsSync(oggSavePath)) fs.mkdirSync(oggSavePath, { recursive: true }); // create dir
+  if (!fs.existsSync(audioSavePath)) fs.mkdirSync(audioSavePath, { recursive: true }); // create dir
 
-    await fs.statSync(filePath);
+  await fs.statSync(filePath);
 
-    const audioFile = await new ffmpeg(filePath);
-    audioFile.addCommand('-y');
+  const audioFile = await new ffmpeg(filePath);
+  audioFile.addCommand('-y');
+  audioFile.addCommand('-ac', '1'); // to mono sound
+  if (audioType == 'ogg') {
     audioFile.addCommand('-acodec', 'libopus');
-    audioFile.addCommand('-ac', '1'); // to mono sound
+  }
+  if (audioType == 'pcm') {
+    audioFile.addCommand('-acodec', 'pcm_s16le');
+    audioFile.addCommand('-b:a', '128000');
+    audioFile.addCommand('-ar ', '48000');
+  }
 
+  try {
     // noize models should be placed to ~/yandex-stt/noize-models/
     // from https://github.com/GregorR/rnnoise-models
     // 1. cb
@@ -49,8 +57,8 @@ async function convertToOgg(filePath) {
     // 3. lq
     // 4. bd
     // 5. sh
-    // const pathToModel = `${dataPath}/noize-models/cb.rnnn`;
-    const pathToModel = `data/cb.rnnn`;
+    // const pathToModel = `${config.dataPath}/noize-models/cb.rnnn`;
+    const pathToModel = `data/cb.rnnn`; // TODO: to dataPath
 
     const afilters = [
       'silenceremove=stop_periods=-1:stop_duration=1:stop_threshold=-40dB', // silence remove
@@ -64,28 +72,50 @@ async function convertToOgg(filePath) {
     // use FFmpeg to improve audio quality - https://www.reddit.com/r/ffmpeg/comments/6y15g1/is_it_possible_to_use_ffmpeg_to_improve_audio/
     // normalize audio - https://superuser.com/questions/323119/how-can-i-normalize-audio-using-ffmpeg
 
-    const destPath = `${oggSavePath}/${Date.now()}.ogg`;
-    const convertedFile = await audioFile.save(destPath);
+    const destPath = `${audioSavePath}/${Date.now()}.${audioExt}`;
 
+    await audioFile.save(destPath);
     return { path: destPath };
   } catch (e) {
-    console.error(`Failed to convert ${filePath}: ` + (e.msg ? e.msg : e));
+    const msg = `Failed to convert ${filePath}: ` + (e.msg ? e.msg : e);
+    console.error(msg);
+    return { error: msg };
   }
+
+}
+
+async function convertToMp3(filePath) {
+  const audioFile = await new ffmpeg(filePath);
+  audioFile.addCommand('-y');
+  audioFile.addCommand('-acodec', 'libmp3lame');
+  const destPath = filePath.replace(/\.(ogg|wav)$/, '.mp3');
+  await audioFile.save(destPath);
+  return destPath;
 }
 
 async function uploadToYandexStorage(filePath) {
   // console.log('uploadToYandexStorage: ', filePath);
+  const ext = require('path').extname(filePath).replace('.', '');
+  if (!['wav', 'ogg', 'mp3'].includes(ext)) {
+    throw new Error(`Extension ${ext} not allowed`);
+  }
+
   if (!inited) s3Init();
-  const uploadName = `yandex-stt/${Date.now()}.ogg`;
+  const uploadName = `yandex-stt/${Date.now()}.${ext}`;
   const url = `https://storage.yandexcloud.net/${config.bucket}/${uploadName}`;
 
   const buffer = fs.readFileSync(filePath);
 
+  const contentTypeMap = {
+    'mp3': 'audio/mpeg',
+    'ogg': 'audio/opus',
+    'wav': 'audio/l16',
+  }
   const params = {
     Bucket: config.bucket,
     Key: uploadName,
     Body: buffer,
-    ContentType: 'audio/opus',
+    ContentType: contentTypeMap[ext],
   }
 
   // try {
@@ -130,11 +160,16 @@ async function uploadToYandexStorage(filePath) {
 }
 
 async function sendAudio(audioUri) {
+  const encoding = {
+    ogg: 'OGG_OPUS',
+    pcm: 'LINEAR16_PCM'
+  }[audioType];
+
   const data = {
     config: {
       specification: {
         languageCode: 'ru-RU',
-        audioEncoding: 'OGG_OPUS',
+        audioEncoding: encoding,
         model: config.specificationModel,
       },
     },
@@ -142,6 +177,10 @@ async function sendAudio(audioUri) {
       uri: audioUri,
     },
   };
+
+  if (audioType == 'pcm') {
+    data.config.specification.sampleRateHertz = 48000;
+  }
 
   const url = 'https://transcribe.api.cloud.yandex.net/speech/stt/v2/longRunningRecognize';
   try {
@@ -201,7 +240,7 @@ function saveText(chunks) {
       if (chunk.channelTag === '1') return chunk.alternatives[0].text;
     })
     .filter((c) => c);
-  const textPath = `${dataPath}/answer.txt`;
+  const textPath = `${config.dataPath}/answer.txt`;
   const text = lines.join('\n');
   console.log('\n' + text);
   fs.writeFileSync(textPath, text);
@@ -211,36 +250,50 @@ function saveText(chunks) {
 
 // upload file, return operation id
 async function fileToRecognize(filePath, filename = '') {
-  // convert to ogg
-  console.log(colors.yellow('1/4 Convert to OGG Opus...'));
-  const res = await convertToOgg(filePath);
+  // convert to ogg/pcm
+  console.log(colors.yellow(`1/4 Convert to ${audioType}...`));
+  const res = await processAudio(filePath, audioType);
   if (!res) return;
+
+  if (res.error) {
+    return { error: res.error };
+  }
+
+  const mp3Path = await convertToMp3(res.path);
+  if (!mp3Path) {
+    return { error: 'Failed to convert to mp3' };
+  }
 
   // upload to Yandex
   console.log(colors.yellow('2/4 Upload to Yandex Object Storage...'));
-  const uploadedUri = await uploadToYandexStorage(res.path);
+  const recognitionUri = await uploadToYandexStorage(res.path);
+  const mp3Uri = await uploadToYandexStorage(mp3Path);
+  if (!recognitionUri) {
+    return { error: 'Failed to upload to Yandex' };
+  }
 
   // send to STT
   console.log(colors.yellow('3/4 Send to SpeechKit...'));
-  const opId = await sendAudio(uploadedUri);
+  const opId = await sendAudio(recognitionUri);
   console.log('Uploaded, id: ' + opId);
 
   const opPath = `${opsPath}/${opId}.json`;
   fs.writeFileSync(opPath, JSON.stringify({
     id: opId,
-    uploadedUri: uploadedUri,
+    uploadedUri: recognitionUri,
+    mp3Uri: mp3Uri,
     updated: Date.now(),
     done: false,
     chunks: [],
     filename: filename,
   }));
 
-  return {uploadedUri, opId};
+  return {uploadedUri: recognitionUri, opId};
 }
 
 module.exports = {
   uploadToYandexStorage,
-  convertToOgg,
+  processAudio,
   sendAudio,
   // getOperation,
   checkAndSave,

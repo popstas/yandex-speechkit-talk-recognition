@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "server": "node server.js",
     "convert-to-ogg": "node convert-to-ogg.js",
     "version": "npm run changelog && git add CHANGELOG.md",
     "postversion": "git push && npm run release",
@@ -22,6 +23,7 @@
     "connect-busboy": "0.0.2",
     "express": "^4.17.1",
     "ffmpeg": "0.0.4",
+    "ffmpeg-static": "^4.3.0",
     "fs-extra": "^9.1.0"
   },
   "bin": {
