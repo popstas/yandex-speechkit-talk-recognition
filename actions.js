@@ -7,6 +7,7 @@ const colors = require('colors');
 
 const audioType = config.audioType || 'ogg'; // ogg|pcm
 const audioExt = audioType == 'ogg' ? 'ogg' : 'wav';
+if (config.filters === undefined) config.filters = true;
 
 const opsPath = `${config.dataPath}/ops`;
 
@@ -21,8 +22,8 @@ function s3Init() {
     secretAccessKey: config.storageUploadSecret,
     region: 'ru-central1',
     httpOptions: {
-      timeout: 10000,
-      connectTimeout: 10000
+      timeout: 30000,
+      connectTimeout: 30000
     },
   });
 }
@@ -60,11 +61,13 @@ async function processAudio(filePath, audioType) {
     // const pathToModel = `${config.dataPath}/noize-models/cb.rnnn`;
     const pathToModel = `data/cb.rnnn`; // TODO: to dataPath
 
-    const afilters = [
-      'silenceremove=stop_periods=-1:stop_duration=1:stop_threshold=-40dB', // silence remove
-      `arnndn=m=${pathToModel}` // noize remove
-    ]
-    audioFile.addCommand('-af', '"' + afilters.join(', ') + '"');
+    if (config.filters) {
+      const afilters = [
+        'silenceremove=stop_periods=-1:stop_duration=1:stop_threshold=-40dB', // silence remove
+        `arnndn=m=${pathToModel}` // noize remove
+      ];
+      audioFile.addCommand('-af', '"' + afilters.join(', ') + '"');
+    }
 
     // TODO: filters
     // compressor - https://superuser.com/questions/1104534/how-to-use-compressor-with-ffmpeg
