@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "dev": "cross-env DATA_DIR=./data/yandex-stt nodemon server.js",
     "server": "node server.js",
     "convert-to-ogg": "node convert-to-ogg.js",
     "version": "npm run changelog && git add CHANGELOG.md",
@@ -27,5 +28,8 @@
   },
   "bin": {
     "yandex-stt": "index.js"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.16"
   }
 }

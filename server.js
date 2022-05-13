@@ -110,7 +110,7 @@ async function upload(req, res) {
 
     const allowedExt = ['mp3', 'wav', 'ogg', 'opus', 'm4a', 'mp4', 'mkv'];
     const regex = new RegExp('\.(' + allowedExt.join('|') + ')$');
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
     if (!regex.test(filename)) {
       const msg = 'Unknown file format, allowed: ' + allowedExt.join(', ');
       console.log(msg);

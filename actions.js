@@ -15,6 +15,52 @@ const audioSavePath = `${config.dataPath}/converted`;
 let aws;
 let inited = false;
 
+// upload file, return operation id
+async function fileToRecognize(filePath, filename = '') {
+  // convert to ogg/pcm
+  console.log(colors.yellow(`1/4 Convert to ${audioType}...`));
+  const res = await processAudio(filePath, audioType);
+  if (!res) return;
+
+  if (res.error) {
+    return { error: res.error };
+  }
+
+  const mp3Path = await convertToMp3(res.path);
+  if (!mp3Path) {
+    return { error: 'Failed to convert to mp3' };
+  }
+
+  // upload to Yandex
+  console.log(colors.yellow('2/4 Upload to Yandex Object Storage...'));
+  const recognitionUri = await uploadToYandexStorage(res.path);
+  const mp3Uri = await uploadToYandexStorage(mp3Path);
+  if (!recognitionUri) {
+    return { error: 'Failed to upload to Yandex' };
+  }
+
+  // send to STT
+  console.log(colors.yellow('3/4 Send to SpeechKit...'));
+  const opId = await sendAudio(recognitionUri);
+  console.log('Uploaded, id: ' + opId);
+
+  if (!fs.existsSync(opsPath)) fs.mkdirSync(opsPath, { recursive: true }); // create dir
+
+  const opPath = `${opsPath}/${opId}.json`;
+
+  fs.writeFileSync(opPath, JSON.stringify({
+    id: opId,
+    uploadedUri: recognitionUri,
+    mp3Uri: mp3Uri,
+    updated: Date.now(),
+    done: false,
+    chunks: [],
+    filename: filename,
+  }));
+
+  return {uploadedUri: recognitionUri, opId};
+}
+
 function s3Init() {
   aws = new AWS.S3({
     endpoint: 'https://storage.yandexcloud.net', 
@@ -61,11 +107,19 @@ async function processAudio(filePath, audioType) {
     // const pathToModel = `${config.dataPath}/noize-models/cb.rnnn`;
     const pathToModel = `assets/noize-models/cb.rnnn`;
 
-    if (config.filters) {
-      const afilters = [
-        'silenceremove=stop_periods=-1:stop_duration=1:stop_threshold=-40dB', // silence remove
-        `arnndn=m=${pathToModel}` // noize remove
+    // filters
+    const afilters = [];
+    if (config.filterSilence) {
+      const args = [
+        // 'start_periods=1:start_duration=1',
+        'stop_periods=-1:stop_duration=1:stop_threshold=-42dB', // 41 - too small
       ];
+      afilters.push('silenceremove=' + args.join(':'));
+    }
+    if (config.filterNoize) {
+      afilters.push(`arnndn=m=${pathToModel}`);
+    }
+    if (afilters.length > 0) {
       audioFile.addCommand('-af', '"' + afilters.join(', ') + '"');
     }
 
@@ -250,52 +304,6 @@ function saveText(chunks) {
   fs.writeFileSync(textPath, text);
 
   console.log(`\nSaved to ${textPath}`);
-}
-
-// upload file, return operation id
-async function fileToRecognize(filePath, filename = '') {
-  // convert to ogg/pcm
-  console.log(colors.yellow(`1/4 Convert to ${audioType}...`));
-  const res = await processAudio(filePath, audioType);
-  if (!res) return;
-
-  if (res.error) {
-    return { error: res.error };
-  }
-
-  const mp3Path = await convertToMp3(res.path);
-  if (!mp3Path) {
-    return { error: 'Failed to convert to mp3' };
-  }
-
-  // upload to Yandex
-  console.log(colors.yellow('2/4 Upload to Yandex Object Storage...'));
-  const recognitionUri = await uploadToYandexStorage(res.path);
-  const mp3Uri = await uploadToYandexStorage(mp3Path);
-  if (!recognitionUri) {
-    return { error: 'Failed to upload to Yandex' };
-  }
-
-  // send to STT
-  console.log(colors.yellow('3/4 Send to SpeechKit...'));
-  const opId = await sendAudio(recognitionUri);
-  console.log('Uploaded, id: ' + opId);
-
-  if (!fs.existsSync(opsPath)) fs.mkdirSync(opsPath, { recursive: true }); // create dir
-
-  const opPath = `${opsPath}/${opId}.json`;
-
-  fs.writeFileSync(opPath, JSON.stringify({
-    id: opId,
-    uploadedUri: recognitionUri,
-    mp3Uri: mp3Uri,
-    updated: Date.now(),
-    done: false,
-    chunks: [],
-    filename: filename,
-  }));
-
-  return {uploadedUri: recognitionUri, opId};
 }
 
 module.exports = {

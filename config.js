@@ -12,7 +12,8 @@ if (fs.existsSync(configPath)) {
 config = {...{
   specificationModel: 'deferred-general',
   dataPath: `${homedir}/yandex-stt`,
-  filters: false,
+  filterSilence: true,
+  filterNoize: true,
 }, ...config};
 
 // env
@@ -24,9 +25,16 @@ const envMap = {
   BUCKET: 'bucket',
 
   DATA_DIR: 'dataPath',
+  FILTER_SILENCE: 'filterSilence',
+  FILTER_NOIZE: 'filterNoize',
 }
 for (let envName in envMap) {
   const confName = envMap[envName];
   if (process.env[envName]) config[confName] = process.env[envName];
+
+  // boolean
+  if (['FILTER_SILENCE', 'FILTER_NOIZE'].includes(envName)) {
+    config[confName] = !!config[confName];
+  }
 }
 module.exports = config;
