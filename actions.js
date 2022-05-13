@@ -174,6 +174,7 @@ async function sendAudio(audioUri) {
         languageCode: 'ru-RU',
         audioEncoding: encoding,
         model: config.specificationModel,
+        literature_text: true, // расстановка знаков - https://cloud.yandex.ru/blog/posts/2022/04/speechkit-punctuator
       },
     },
     audio: {
