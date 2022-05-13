@@ -59,7 +59,7 @@ async function processAudio(filePath, audioType) {
     // 4. bd
     // 5. sh
     // const pathToModel = `${config.dataPath}/noize-models/cb.rnnn`;
-    const pathToModel = `data/cb.rnnn`; // TODO: to dataPath
+    const pathToModel = `assets/noize-models/cb.rnnn`;
 
     if (config.filters) {
       const afilters = [
