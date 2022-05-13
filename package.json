@@ -23,7 +23,6 @@
     "connect-busboy": "0.0.2",
     "express": "^4.17.1",
     "ffmpeg": "0.0.4",
-    "ffmpeg-static": "^4.3.0",
     "fs-extra": "^9.1.0"
   },
   "bin": {

@@ -13,20 +13,19 @@ axios.defaults.headers.common['Authorization'] = 'Api-Key ' + config.apiKey;
 
 const opsPath = config.dataPath + '/ops';
 
-initFfmpeg();
+// initFfmpeg();
 initExpress(app);
 
-function initFfmpeg() {
+/*function initFfmpeg() {
   const pathToFfmpeg = require('ffmpeg-static');
   const destPath = '/usr/bin/ffmpeg';
   if (!fs.existsSync(destPath)) fs.symlinkSync(pathToFfmpeg, destPath);
-}
+}*/
 
 function initExpress(app) {
   // CORS
   app.use(function (req, res, next) {
     res.header("Access-Control-Allow-Origin", "*");
-    // res.header("Access-Control-Allow-Methods", "*");
     res.header(
       "Access-Control-Allow-Headers",
       "Origin, X-Requested-With, Content-Type, Accept"
