@@ -4,28 +4,32 @@ version: '3'
 services:
 
   backend:
-    # image: popstas/yandex-speechkit-talk-recognition:latest
-    image: node:12
+    image: popstas/yandex-speechkit-talk-recognition:latest
+    #image: node:16
     restart: always
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
+    build: .
     environment:
       PORT: ${SERVER_PORT}
       DATA_DIR: ${DATA_DIR}
+
+      API_KEY: ${API_KEY}
+      STORAGE_UPLOAD_ID: $STORAGE_UPLOAD_ID
+      STORAGE_UPLOAD_SECRET: $STORAGE_UPLOAD_SECRET
+      BUCKET: $BUCKET
     ports:
     - ${SERVER_PORT}:${SERVER_PORT}
     volumes:
     - .:/app
-    - /home/popstas/yandex-stt:${DATA_DIR}
+    - ./data/yandex-stt:${DATA_DIR}
     working_dir: /app
     command:
       npm run server
 
   frontend:
-    # image: popstas/yandex-speechkit-talk-viewer:latest
-    image: node:12
-    # build: data/front
+    image: popstas/yandex-speechkit-talk-viewer:latest
+    #image: node:16
+    restart: always
+    build: data/front
     environment:
       HOST: 0.0.0.0 # for nuxt
       PORT: ${FRONT_PORT}
