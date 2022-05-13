@@ -8,9 +8,10 @@ const fs = require('fs-extra');
 const axios = require('axios');
 const config = require('./config');
 const path = require('path');
-const { exec } = require('child_process');
 
 axios.defaults.headers.common['Authorization'] = 'Api-Key ' + config.apiKey;
+
+const opsPath = config.dataPath + '/ops';
 
 initFfmpeg();
 initExpress(app);
@@ -39,11 +40,16 @@ function initExpress(app) {
   app.use(busboy());
 
   // better serve with nginx
-  app.use("/ops", express.static(config.dataPath + '/ops'));
+  app.use("/ops", express.static(opsPath));
 
   app.get("/", (req, res) => {
     res.send("yandex-stt working");
   });
+
+  /*app.get("/all", (req, res) => {
+    const items = getAllOps();
+    res.send({ items });
+  });*/
 
   app.post("/upload", upload);
 
@@ -52,6 +58,46 @@ function initExpress(app) {
     console.log(`Listening at http://localhost:${port}`);
   });
 }
+
+/*function getAllOps() {
+  const files = fs.readdirSync(opsPath);
+
+  const filesSorted = files.map(function (fileName) {
+    return {
+      name: fileName,
+      time: fs.statSync(opsPath + '/' + fileName).mtime.getTime()
+    };
+  })
+  .sort(function (a, b) {
+    return b.time - a.time; })
+  .map(function (v) {
+    return v.name; });
+
+  /!* const fNames = [
+    'created',
+    'id',
+    'id',
+    'id',
+    'id',
+    'id',
+    'id',
+  ] *!/
+  const filesData = filesSorted.map(fileName => {
+    const raw = fs.readFileSync(opsPath + '/' + fileName, 'utf8');
+    console.log('raw: ', raw);
+    try {
+      const dataAll = JSON.parse(raw);
+      const data = {};
+      /!* for (let name in dataAll) {
+        if (fNames.includes(name)) data[name] = dataAll[name];
+      } *!/
+      return dataAll;
+    } catch(e) {
+      return false;
+    }
+  }).filter(Boolean);
+  return filesData;
+}*/
 
 async function upload(req, res) {
   let fstream;

@@ -281,7 +281,10 @@ async function fileToRecognize(filePath, filename = '') {
   const opId = await sendAudio(recognitionUri);
   console.log('Uploaded, id: ' + opId);
 
+  if (!fs.existsSync(opsPath)) fs.mkdirSync(opsPath, { recursive: true }); // create dir
+
   const opPath = `${opsPath}/${opId}.json`;
+
   fs.writeFileSync(opPath, JSON.stringify({
     id: opId,
     uploadedUri: recognitionUri,
