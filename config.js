@@ -1,14 +1,32 @@
 const fs = require('fs');
 const homedir = require('os').homedir();
-// console.log('process.env.DATA_DIR: ', process.env.DATA_DIR);
 const dataPath = process.env.DATA_DIR || `${homedir}/yandex-stt`;
 const configPath = `${dataPath}/config.js`;
 
+let config = {};
 if (fs.existsSync(configPath)) {
-  module.exports = require(configPath);
-}
-else {
-  module.exports = {};
+  config = require(configPath);
 }
 
-module.exports.dataPath = dataPath;
+// defaults
+config = {...{
+  specificationModel: 'deferred-general',
+  dataPath: `${homedir}/yandex-stt`,
+  filters: false,
+}, ...config};
+
+// env
+const envMap = {
+  API_KEY: 'apiKey',
+  STORAGE_UPLOAD_ID: 'storageUploadId',
+  STORAGE_UPLOAD_SECRET: 'storageUploadSecret',
+  SPECIFICATION_MODEL: 'specificationModel',
+  BUCKET: 'bucket',
+
+  DATA_DIR: 'dataPath',
+}
+for (let envName in envMap) {
+  const confName = envMap[envName];
+  if (process.env[envName]) config[confName] = process.env[envName];
+}
+module.exports = config;
