@@ -41,7 +41,10 @@ async function fileToRecognize(filePath, filename = '') {
 
   // send to STT
   console.log(colors.yellow('3/4 Send to SpeechKit...'));
-  const opId = await sendAudio(recognitionUri);
+  const opId = await sendAudio({audioUri: recognitionUri, language, punctuation});
+  if (opId.error) {
+    return { error: opId.error };
+  }
   console.log('Uploaded, id: ' + opId);
 
   if (!fs.existsSync(opsPath)) fs.mkdirSync(opsPath, { recursive: true }); // create dir
@@ -216,12 +219,18 @@ async function uploadToYandexStorage(filePath) {
     }
 }
 
-async function sendAudio(audioUri) {
-  const encoding = {
+async function sendAudio({audioUri, language, punctuation = true}) {
+  const langMap = {
+    'ru': 'ru-RU',
+    'en': 'en-US',
+  }
+  const languageCode = langMap[language] || 'ru-RU';
+  const audioEncoding = {
     ogg: 'OGG_OPUS',
     pcm: 'LINEAR16_PCM'
   }[audioType];
 
+  const model = language === 'ru' ? config.specificationModel : 'general';
   const data = {
     config: {
       specification: {
@@ -246,7 +255,9 @@ async function sendAudio(audioUri) {
     return res.data.id;
   } catch (e) {
     console.log('e.response.data.message: ', e.response.data.message);
-    console.log('error: ', e);
+    return { error: e.response.data.message };
+
+    // console.log('error: ', e);
   }
 }
 
