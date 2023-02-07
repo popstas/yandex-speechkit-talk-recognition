@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "cross-env DATA_DIR=./data/yandex-stt nodemon server.js",
+    "nodemon": "nodemon --ignore data server.js",
+    "dev": "cross-env DATA_DIR=./data/yandex-stt nodemon --ignore data server.js",
     "server": "node server.js",
     "convert-to-ogg": "node convert-to-ogg.js",
     "version": "npm run changelog && git add CHANGELOG.md",
@@ -24,12 +25,11 @@
     "connect-busboy": "0.0.2",
     "express": "^4.17.1",
     "ffmpeg": "0.0.4",
-    "fs-extra": "^9.1.0"
+    "fs-extra": "^9.1.0",
+    "lowdb": "^3.0.0",
+    "nodemon": "^2.0.16"
   },
   "bin": {
     "yandex-stt": "index.js"
-  },
-  "devDependencies": {
-    "nodemon": "^2.0.16"
   }
 }

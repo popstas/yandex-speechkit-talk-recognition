@@ -16,10 +16,16 @@ let aws;
 let inited = false;
 
 // upload file, return operation id
-async function fileToRecognize(filePath, filename = '') {
+async function fileToRecognize({
+  filePath,
+  filename = '',
+  postProcessing = true,
+  language = 'ru',
+  punctuation = true,
+}) {
   // convert to ogg/pcm
-  console.log(colors.yellow(`1/4 Convert to ${audioType}...`));
-  const res = await processAudio(filePath, audioType);
+  console.log(colors.yellow(`1/4 Convert to ${audioType} ` + (postProcessing ? 'with' : 'without') + ' post processing...'));
+  const res = await processAudio(filePath, audioType, postProcessing);
   if (!res) return;
 
   if (res.error) {
@@ -77,7 +83,7 @@ function s3Init() {
   });
 }
 
-async function processAudio(filePath, audioType) {
+async function processAudio(filePath, audioType, postProcessing = true) {
   if (!['ogg', 'pcm'].includes(audioType)) {
     throw new Error('Only ogg and pcm types supported');
   }
@@ -89,6 +95,7 @@ async function processAudio(filePath, audioType) {
 
   const audioFile = await new ffmpeg(filePath);
   audioFile.addCommand('-y');
+  audioFile.addCommand('-vn'); // disable video processing
   audioFile.addCommand('-ac', '1'); // to mono sound
   if (audioType == 'ogg') {
     audioFile.addCommand('-acodec', 'libopus');
@@ -112,14 +119,14 @@ async function processAudio(filePath, audioType) {
 
     // filters
     const afilters = [];
-    if (config.filterSilence) {
+    if (postProcessing && config.filterSilence) {
       const args = [
         // 'start_periods=1:start_duration=1',
         'stop_periods=-1:stop_duration=1:stop_threshold=-42dB', // 41 - too small
       ];
       afilters.push('silenceremove=' + args.join(':'));
     }
-    if (config.filterNoize) {
+    if (postProcessing && config.filterNoize) {
       afilters.push(`arnndn=m=${pathToModel}`);
     }
     if (afilters.length > 0) {
@@ -234,10 +241,13 @@ async function sendAudio({audioUri, language, punctuation = true}) {
   const data = {
     config: {
       specification: {
-        languageCode: 'ru-RU',
-        audioEncoding: encoding,
-        model: config.specificationModel,
-        literature_text: true, // расстановка знаков - https://cloud.yandex.ru/blog/posts/2022/04/speechkit-punctuator
+        languageCode,
+        // languageCode: 'en-US',
+        // languageCode: 'auto',
+        audioEncoding,
+        model,
+        literature_text: punctuation, // расстановка знаков - https://cloud.yandex.ru/blog/posts/2022/04/speechkit-punctuator
+        // rawResults: true, // числа прописью, отменяет знаки препинания
       },
     },
     audio: {

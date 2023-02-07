@@ -13,7 +13,7 @@ config = {...{
   specificationModel: 'deferred-general',
   dataPath: `${homedir}/yandex-stt`,
   filterSilence: true,
-  filterNoize: true,
+  filterNoize: false,
 }, ...config};
 
 // env

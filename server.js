@@ -8,13 +8,26 @@ const fs = require('fs-extra');
 const axios = require('axios');
 const config = require('./config');
 const path = require('path');
+// const { Low, JSONFile } = require('lowdb');
 
 axios.defaults.headers.common['Authorization'] = 'Api-Key ' + config.apiKey;
 
 const opsPath = config.dataPath + '/ops';
 
+// init log db
+// const adapter = new JSONFile(`${config.dataPath}/ops.json`);
+// const db = new Low(adapter);
+// let ops;
+
+start();
+
+function log(obj) {
+  console.log(obj);
+  // ops.push(obj);
+  // db.write();
+}
+
 // initFfmpeg();
-initExpress(app);
 
 /*function initFfmpeg() {
   const pathToFfmpeg = require('ffmpeg-static');
@@ -22,6 +35,14 @@ initExpress(app);
   if (!fs.existsSync(destPath)) fs.symlinkSync(pathToFfmpeg, destPath);
 }*/
 
+async function start() {
+  // await db.read();
+  // db.data ||= { ops: [] };
+  // ops = db.data.ops;
+
+  initExpress(app);
+
+}
 function initExpress(app) {
   // CORS
   app.use(function (req, res, next) {
@@ -101,6 +122,25 @@ function initExpress(app) {
 async function upload(req, res) {
   let fstream;
   req.pipe(req.busboy);
+
+  let postProcessing = true;
+  let language = 'ru';
+  let punctuation = 'ru';
+  req.busboy.on('field', (name, val, info) => {
+    if (name === 'postProcessing') {
+      postProcessing = val == 'true';
+      console.log("postProcessing: ", postProcessing);
+    }
+    if (name === 'language') {
+      language = val;
+      console.log("language: ", language);
+    }
+    if (name === 'punctuation') {
+      punctuation = val == 'true';
+      console.log("punctuation: ", punctuation);
+    }
+  });
+
   req.busboy.on('file', function (fieldname, file, filename) {
     console.log("Uploading: " + filename);
 
@@ -121,12 +161,23 @@ async function upload(req, res) {
     const uploadPath = `${uploadDir}/${Date.now()}_${fieldname}`;
     fstream = fs.createWriteStream(uploadPath);
     file.pipe(fstream);
-
+    
     // after upload file
     fstream.on('close', async function () {
       console.log("Upload Finished of " + filename);
 
-      const resRec = await actions.fileToRecognize(uploadPath, filename);
+      const resRec = await actions.fileToRecognize({
+        filePath: uploadPath,
+        filename,
+        postProcessing,
+        language,
+        punctuation,
+      });
+      log({
+        id: resRec.opId,
+        status: 'converted',
+        date: new Date().toUTCString(),
+      });
 
       if (resRec && resRec.error) {
         res.json({error: resRec.error});
@@ -136,7 +187,14 @@ async function upload(req, res) {
       const delay = 10;
       const interval = setInterval(async () => {
         const done = await actions.checkAndSave(resRec.opId, resRec.uploadedUri);
-        if (done) clearInterval(interval);
+        if (done) {
+          log({
+            id: resRec.opId,
+            status: 'done',
+            date: new Date().toUTCString(),
+          });
+          clearInterval(interval);
+        }
       }, delay * 1000);
 
       // const opId = '123';

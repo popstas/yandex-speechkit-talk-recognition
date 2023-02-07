@@ -54,7 +54,7 @@ async function start() {
   
   // convert and upload file
   else {
-    const resRec = await fileToRecognize(options.file);
+    const resRec = await actions.fileToRecognize({filePath: options.file});
     opId = resRec.opId;
     uploadedUri = resRec.uploadedUri;
   }

@@ -2,6 +2,8 @@ FROM node:16-alpine AS builder
 
 WORKDIR /build
 COPY package*.json ./
+#RUN chown -R node:node .
+#USER node
 RUN npm install
 
 
@@ -14,8 +16,8 @@ WORKDIR /app
 COPY --from=builder /build/node_modules ./node_modules
 COPY . .
 
-#RUN chown -R node:node /app
-USER node
+#USER node
+#RUN chown -R node:node /app/.nuxt
 
 VOLUME ["/app/data"]
 EXPOSE 5771
