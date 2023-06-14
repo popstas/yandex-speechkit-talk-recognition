@@ -27,6 +27,12 @@ const envMap = {
   DATA_DIR: 'dataPath',
   FILTER_SILENCE: 'filterSilence',
   FILTER_NOIZE: 'filterNoize',
+
+  WHISPER_BASE_URL: 'whisperBaseUrl',
+  WHISPER_ASR_MODEL: 'whisperAsrModel',
+
+  TELEGRAM_BOT_TOKEN: 'telegramBotToken',
+  DENOISE_SERVICE_URL: 'denoiseServiceUrl'
 }
 for (let envName in envMap) {
   const confName = envMap[envName];

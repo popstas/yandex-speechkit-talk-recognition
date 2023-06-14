@@ -8,7 +8,11 @@ const fs = require('fs-extra');
 const axios = require('axios');
 const config = require('./config');
 const path = require('path');
+const packageJson = require("./package.json");
 // const { Low, JSONFile } = require('lowdb');
+
+const { Telegraf, Input } = require('telegraf');
+const { message, editedMessage } = require('telegraf/filters');
 
 axios.defaults.headers.common['Authorization'] = 'Api-Key ' + config.apiKey;
 
@@ -19,6 +23,7 @@ const opsPath = config.dataPath + '/ops';
 // const db = new Low(adapter);
 // let ops;
 
+let bot;
 start();
 
 function log(obj) {
@@ -42,7 +47,193 @@ async function start() {
 
   initExpress(app);
 
+  initBot();
 }
+
+function initBot() {
+  try {
+    bot = new Telegraf(config.telegramBotToken);
+    console.log('bot started');
+    bot.on([message('voice')], onVoice);
+    bot.on([message('text')], onText);
+    // bot.on('channel_post', onMessage);
+    process.once('SIGINT', () => bot.stop('SIGINT'));
+    process.once('SIGTERM', () => bot.stop('SIGTERM'));
+    bot.launch();
+  } catch (e) {
+    console.log('restart after 5 seconds...');
+    setTimeout(initBot, 5000);
+  }
+}
+
+async function downloadFile(url, filePath) {
+  const response = await axios({
+    url: url,
+    responseType: 'stream',
+  });
+
+  const stream = response.data;
+  const writer = fs.createWriteStream(filePath);
+  stream.pipe(writer);
+
+  return new Promise((resolve, reject) => {
+    writer.on('finish', resolve);
+    writer.on('error', reject);
+  });
+}
+
+async function downloadTelegramFile(ctx, fileId, filePath) {
+  try {
+    const url = await ctx.telegram.getFileLink(ctx.message.voice.file_id);
+    await downloadFile(url.href, filePath);
+    return true;
+  }
+  catch (e) {
+    return false;
+  }
+}
+
+// split text to paragraphs, when > 200 symbols in paragraph
+function prettyText(text) {
+  const paragraphs = [];
+  const sentences = text.split(/\.[ \n]/g);
+  console.log("sentences:", sentences.length);
+  let paragraph = '';
+  while (sentences.length > 0) {
+    paragraph += sentences.shift() + '. ';
+    paragraph = paragraph.replace(/\.\. $/, '. '); // remove ..
+
+    if (paragraph.length > 200) {
+      paragraphs.push(paragraph.trim() + '');
+      // console.log("zero paragraph:", paragraph);
+      paragraph = '';
+    }
+  }
+  if (paragraph.length > 0) {
+    paragraphs.push(paragraph.trim() + '');
+  }
+  // console.log("paragraphs", paragraphs);
+
+  const prettyText = paragraphs.join('\n\n');
+  return prettyText;
+}
+
+
+async function onText(ctx) {
+  if (ctx.message.reply_to_message) {
+    const text = ctx.message.reply_to_message.caption || ctx.message.reply_to_message.text;
+    // console.log("text:", text);
+    const opId = getOpIdByText(text);
+    // console.log("opId:", opId);
+    if (!opId) return;
+
+    const op = readOpsData(opId);
+    // console.log("op:", op);
+
+    const prompt = ctx.message.text;
+    // console.log("prompt:", prompt);
+
+    const fileUrl = op.uploadedUri;
+    const filePath = getFilenameSavePath('voice.ogg');
+    await downloadFile(fileUrl, filePath);
+
+    const resRec = await actions.fileToRecognize({
+      filePath,
+      provider: 'whisper',
+      prompt,
+    });
+    // console.log("resRec:", resRec);
+    // ctx.replyWithVoice(Input.fromURL(resRec.uploadedUri), {caption: getOpUrl(resRec.opId)});
+
+    await waitOpDoneSendText(ctx, resRec.opId);
+    return;
+  }
+  const text = prettyText(ctx.message.text);
+  ctx.reply(text);
+}
+
+function readOpsData(opId) {
+  const opPath = `${opsPath}/${opId}.json`;
+  return JSON.parse(fs.readFileSync(`${opPath}`));
+}
+
+async function downloadVoiceFile(ctx, fileId, filePath) {
+  // download voice file to local
+  let tries = 5;
+  return await new Promise((resolve, reject) => {
+    const handler = async () => {
+      ctx.telegram.sendChatAction(ctx.message.chat.id, 'upload_voice');
+      const ok = await downloadTelegramFile(ctx, fileId, filePath);
+      if (ok) {
+        clearInterval(interval);
+        return resolve(filePath);
+      } else {
+        tries--;
+        if (tries <= 0) {
+          ctx.reply('Failed to get file from telegram')
+          clearInterval(interval);
+        }
+        else {
+          ctx.reply('Failed to get file from telegram, next repeat after 5 secs...')
+        }
+      }
+    };
+    const interval = setInterval(handler, 5000);
+    handler();
+  });
+}
+
+async function waitOpDoneSendText(ctx, opId) {
+  const interval = setInterval(() => {
+    try {
+      ctx.telegram.sendChatAction(ctx.message.chat.id, 'typing');
+
+      const json = readOpsData(opId);
+      if (json.done) {
+        clearInterval(interval);
+        const text = json.chunks.map(chunk => {
+          return chunk.alternatives[0].text.trim();
+        }).join(' ').replace(/ +/g, ' ');
+
+        // ctx.reply(`${prettyText(text)}\n\n${getOpUrl(opId)}`);
+        ctx.reply(prettyText(text));
+      }
+
+    } catch (e) {
+      console.log("Check failed:", e);
+    }
+  }, 2000);
+}
+
+async function onVoice(ctx) {
+  // console.log("ctx.message.voice:", ctx.message.voice);
+
+  const filePath = getFilenameSavePath('voice.ogg');
+  await downloadVoiceFile(ctx, ctx.message.voice.file_id, filePath);
+
+  const resRec = await actions.fileToRecognize({
+    filePath,
+    provider: 'whisper',
+  });
+
+  console.log("resRec:", resRec);
+
+  ctx.replyWithVoice(Input.fromURL(resRec.uploadedUri), {caption: getOpUrl(resRec.opId)});
+
+  await waitOpDoneSendText(ctx, resRec.opId);
+
+}
+
+function getOpUrl(opId) {
+  return `https://talk.popstas.ru/talk/${opId}`;
+}
+function getOpIdByText(text) {
+  const match = text.match(/\/talk\/([a-z0-9]+)/);
+  if (match) {
+    return match[1];
+  }
+}
+
 function initExpress(app) {
   // CORS
   app.use(function (req, res, next) {
@@ -63,7 +254,11 @@ function initExpress(app) {
   app.use("/ops", express.static(opsPath));
 
   app.get("/", (req, res) => {
-    res.send("yandex-stt working");
+    res.json({
+      version: packageJson.version,
+      whisper: true,
+      yandex: !!config.apiKey,
+    });
   });
 
   /*app.get("/all", (req, res) => {
@@ -119,13 +314,28 @@ function initExpress(app) {
   return filesData;
 }*/
 
+function getUploadDir() {
+  const uploadDir = path.normalize(`${config.dataPath}/upload`);
+  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+  return uploadDir;
+}
+
+function getFilenameSavePath(filename) {
+  const uploadDir = getUploadDir();
+  return `${uploadDir}/${Date.now()}_${filename}`;
+}
+
 async function upload(req, res) {
   let fstream;
   req.pipe(req.busboy);
 
+  // let provider = 'yandex';
+  let provider = 'whisper';
+
   let postProcessing = true;
   let language = 'ru';
-  let punctuation = 'ru';
+  let punctuation = true;
+  let prompt = '';
   req.busboy.on('field', (name, val, info) => {
     if (name === 'postProcessing') {
       postProcessing = val == 'true';
@@ -139,18 +349,20 @@ async function upload(req, res) {
       punctuation = val == 'true';
       console.log("punctuation: ", punctuation);
     }
+    if (name === 'provider') {
+      provider = val;
+      console.log("provider: ", provider);
+    }
+    if (name === 'prompt' && val) {
+      prompt = val;
+    }
   });
 
   req.busboy.on('file', function (fieldname, file, filename) {
     console.log("Uploading: " + filename);
 
-    //Path where image will be uploaded
-    const uploadDir = path.normalize(`${config.dataPath}/upload`);
-    console.log('uploadDir: ', uploadDir);
-
-    const allowedExt = ['mp3', 'wav', 'ogg', 'opus', 'm4a', 'mp4', 'mkv'];
+    const allowedExt = ['mp3', 'wav', 'ogg', 'opus', 'aac', 'm4a', 'mp4', 'mkv'];
     const regex = new RegExp('\.(' + allowedExt.join('|') + ')$');
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
     if (!regex.test(filename)) {
       const msg = 'Unknown file format, allowed: ' + allowedExt.join(', ');
       console.log(msg);
@@ -158,46 +370,28 @@ async function upload(req, res) {
       return;
     }
 
-    const uploadPath = `${uploadDir}/${Date.now()}_${fieldname}`;
-    fstream = fs.createWriteStream(uploadPath);
+    const filePath = getFilenameSavePath(fieldname);;
+    fstream = fs.createWriteStream(filePath);
     file.pipe(fstream);
-    
+
     // after upload file
     fstream.on('close', async function () {
       console.log("Upload Finished of " + filename);
 
       const resRec = await actions.fileToRecognize({
-        filePath: uploadPath,
+        filePath,
         filename,
         postProcessing,
         language,
         punctuation,
-      });
-      log({
-        id: resRec.opId,
-        status: 'converted',
-        date: new Date().toUTCString(),
+        provider,
+        prompt,
       });
 
-      if (resRec && resRec.error) {
-        res.json({error: resRec.error});
-        return;
+      if (resRec.error) {
+        return res.error(resRec.error);
       }
 
-      const delay = 10;
-      const interval = setInterval(async () => {
-        const done = await actions.checkAndSave(resRec.opId, resRec.uploadedUri);
-        if (done) {
-          log({
-            id: resRec.opId,
-            status: 'done',
-            date: new Date().toUTCString(),
-          });
-          clearInterval(interval);
-        }
-      }, delay * 1000);
-
-      // const opId = '123';
       res.json({opId: resRec.opId});
     });
   })

@@ -8,4 +8,7 @@ module.exports = {
 
   filterSilence: true,
   filterNoize: true,
+
+  telegramBotToken: '',
+  denoiseServiceUrl: 'http://url-to-denoise-audio-endpoint',
 }

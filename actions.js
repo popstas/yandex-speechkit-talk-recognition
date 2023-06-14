@@ -3,7 +3,14 @@ const config = require('./config');
 const ffmpeg = require('ffmpeg');
 const AWS = require('aws-sdk');
 const axios = require('axios');
+const FormData = require('form-data');
 const colors = require('colors');
+
+axios.interceptors.request.use(request => {
+  request.maxContentLength = Infinity;
+  request.maxBodyLength = Infinity;
+  return request;
+});
 
 const audioType = config.audioType || 'ogg'; // ogg|pcm
 const audioExt = audioType == 'ogg' ? 'ogg' : 'wav';
@@ -17,6 +24,85 @@ let inited = false;
 
 // upload file, return operation id
 async function fileToRecognize({
+  filePath,
+  filename = '',
+  postProcessing = true,
+  language = 'ru',
+  punctuation = true,
+  provider = '',
+  prompt = '',
+}) {
+  let resRec;
+  if (provider === 'yandex') {
+    resRec = await fileToRecognizeYandex({
+      filePath,
+      filename,
+      postProcessing,
+      language,
+      punctuation,
+    });
+    /*log({
+      id: resRec.opId,
+      status: 'converted',
+      date: new Date().toUTCString(),
+    });*/
+
+    if (resRec && resRec.error) {
+      return {error: resRec.error};
+    }
+
+    const delay = 10;
+    const interval = setInterval(async () => {
+      const done = await checkAndSave(resRec.opId, resRec.uploadedUri);
+      if (done) {
+        /*log({
+          id: resRec.opId,
+          status: 'done',
+          date: new Date().toUTCString(),
+        });*/
+        clearInterval(interval);
+      }
+    }, delay * 1000);
+  }
+
+  if (provider === 'whisper') {
+    if (!prompt) prompt = 'Предложение, со знаками.';
+    resRec = await fileToRecognizeWhisper({
+      filePath,
+      filename,
+      postProcessing,
+      language,
+      prompt,
+    });
+    /*log({
+      id: resRec.opId,
+      status: 'converted',
+      date: new Date().toUTCString(),
+    });*/
+
+    if (resRec && resRec.error) {
+      return {error: resRec.error};
+    }
+
+    /*const delay = 10;
+    const interval = setInterval(async () => {
+      const done = await actions.checkAndSave(resRec.opId, resRec.uploadedUri);
+      if (done) {
+        log({
+          id: resRec.opId,
+          status: 'done',
+          date: new Date().toUTCString(),
+        });
+        clearInterval(interval);
+      }
+    }, delay * 1000);*/
+  }
+
+  return resRec;
+}
+
+// upload file, return operation id
+async function fileToRecognizeYandex({
   filePath,
   filename = '',
   postProcessing = true,
@@ -47,7 +133,7 @@ async function fileToRecognize({
 
   // send to STT
   console.log(colors.yellow('3/4 Send to SpeechKit...'));
-  const opId = await sendAudio({audioUri: recognitionUri, language, punctuation});
+  const opId = await sendAudioYandex({audioUri: recognitionUri, language, punctuation});
   if (opId.error) {
     return { error: opId.error };
   }
@@ -68,6 +154,194 @@ async function fileToRecognize({
   }));
 
   return {uploadedUri: recognitionUri, opId};
+}
+
+async function detectAudioFileLanguage(mp3Path) {
+  const formData = new FormData();
+  formData.append('audio_file', fs.createReadStream(mp3Path));
+  const detect = await axios.post(
+      config.whisperBaseUrl + '/detect-language',
+      formData,
+      { headers: formData.getHeaders() }
+  );
+  return detect;
+}
+
+async function denoiseFile(filePath) {
+  const formData = new FormData();
+  formData.append('audio_file', fs.createReadStream(filePath));
+  try {
+    const res = await axios.post(
+        config.denoiseServiceUrl,
+        formData,
+        { headers: formData.getHeaders(), responseType: 'stream', }
+    );
+    return res;
+  } catch (e) {
+    console.log("error denoise", e.message);
+    return false;
+  }
+}
+
+
+async function sendAudioWhisper({mp3Path, language, prompt = ''}) {
+  try {
+
+    // detect-language
+    const detect = await detectAudioFileLanguage(mp3Path);
+    // console.log("detect.data:", detect.data);
+
+    // asr
+    console.log('send to whisper...')
+    const formData2 = new FormData();
+    formData2.append('audio_file', fs.createReadStream(mp3Path));
+    formData2.append('task', 'transcribe');
+    // formData2.append('initial_prompt', prompt); // doesn't work from form, only from GET params
+    // formData2.append('output', 'json');
+    // formData2.append('word_timestamps ', 'true');
+    formData2.append('language', detect.data.detected_language);
+
+    // console.log("formData2:", formData2);
+    const res = await axios.post(
+        config.whisperBaseUrl + '/asr?output=json&word_timestamps=true&initial_prompt=' + encodeURIComponent(prompt),
+        formData2,
+        { headers: formData2.getHeaders() }
+    );
+    // console.log("res:", res);
+    return res.data;
+  }
+  catch(e) {
+    console.log(colors.yellow('Error: ' + e.message));
+    console.log(e);
+    return {error: e.message};
+  }
+}
+
+async function fileToRecognizeWhisper({
+  filePath,
+  filename = '',
+  postProcessing = true,
+  language = 'ru',
+  prompt = '',
+}) {
+  // convert to ogg/pcm
+  console.log(colors.yellow(`1/4 Convert to ${audioType} ` + (postProcessing ? 'with' : 'without') + ' post processing...'));
+
+  const res = await processAudio(filePath, audioType, postProcessing);
+  if (!res) return;
+
+  const uploadedUri = await uploadToYandexStorage(res.path);
+
+  if (res.error) {
+    return { error: res.error };
+  }
+
+  const mp3Path = await convertToMp3(res.path);
+  if (!mp3Path) {
+    return { error: 'Failed to convert to mp3' };
+  }
+
+  const opId = buildIdByFilePath(mp3Path);
+
+  if (!fs.existsSync(opsPath)) fs.mkdirSync(opsPath, { recursive: true }); // create dir
+  const opPath = `${opsPath}/${opId}.json`;
+
+  console.log(colors.yellow('2/4 Upload to Yandex...'));
+  const mp3Uri = await uploadToYandexStorage(mp3Path);
+
+  let chunks = [];
+  let done = false;
+
+  // upload to Whisper
+  console.log(colors.yellow(`3/4 Recognize with Whisper, language: ${language}, prompt: ${prompt}...`));
+  sendAudioWhisper({mp3Path, language, prompt}).then(whRes => {
+    done = true;
+    console.log(colors.yellow('4/4 Save recognized text...'));
+    // console.log("whRes:", whRes);
+    if (whRes.error) {
+      fs.writeFileSync(opPath, JSON.stringify({
+        id: `${opId}`,
+        updated: Date.now(),
+        done,
+        uploadedUri,
+        mp3Uri,
+        chunks,
+        filename,
+        prompt,
+        error: whRes.error,
+      }));
+      return {uploadedUri, opId};
+    }
+    // TODO: segments without word splitting
+    const data = {}
+    chunks = whRes.segments.map(s => {
+      if (Array.isArray(s)) {
+        // faster-whisper
+        const [start, end, text] = s;
+        data.start = start;
+        data.end = end;
+        data.text = text;
+      }
+      else {
+        // gpu-faster-whisper
+        const {start, end, text} = s;
+        data.start = start;
+        data.end = end;
+        data.text = text;
+      }
+
+      return {
+        channelTag: '1',
+        alternatives: [
+          {
+            words: [
+              {
+                startTime: `${data.start}s`,
+              }
+            ],
+            text: data.text,
+          }
+        ]
+      };
+    });
+
+    fs.writeFileSync(opPath, JSON.stringify({
+      id: `${opId}`,
+      updated: Date.now(),
+      done,
+      uploadedUri,
+      mp3Uri,
+      chunks,
+      filename,
+      prompt,
+    }));
+  });
+
+
+
+  fs.writeFileSync(opPath, JSON.stringify({
+    id: `${opId}`,
+    updated: Date.now(),
+    done,
+    uploadedUri,
+    mp3Uri,
+    chunks,
+    filename,
+    prompt,
+  }));
+
+  return {uploadedUri, opId};
+}
+
+// return id based on file modified time
+function buildIdByFilePath(mp3Path) {
+  return `${Math.floor(fs.statSync(mp3Path).mtimeMs)}${genHash()}`;
+}
+
+function genHash(length = 16) {
+  const hex = Math.floor(Math.random() * 16777215).toString(16);
+  const hash = "0".repeat(length - hex.length) + hex;
+  return hash;
 }
 
 function s3Init() {
@@ -93,7 +367,41 @@ async function processAudio(filePath, audioType, postProcessing = true) {
 
   await fs.statSync(filePath);
 
+  // denoise remote
+  try {
+    // convert to wav
+    // TODO: тут часто напрасно конвертируется в wav,
+    // например, не проверяется живость сервиса шумоподавления
+    console.log("Convert to wav...");
+    const audioFileWav = await new ffmpeg(filePath);
+    audioFileWav.addCommand('-acodec', 'pcm_s16le');
+    audioFileWav.addCommand('-b:a', '128000');
+    audioFileWav.addCommand('-ar ', '48000');
+    audioFileWav.addCommand('-y');
+    audioFileWav.addCommand('-vn'); // disable video processing
+    audioFileWav.addCommand('-ac', '1'); // to mono sound
+    const wavPath = `${audioSavePath}/${Date.now()}_${genHash()}.wav`;
+    await audioFileWav.save(wavPath);
+
+    // denoise
+    console.log("Denoise...");
+    const denoiseRes = await denoiseFile(wavPath);
+    fs.unlinkSync(wavPath); // remove temp wav
+
+    // save file
+    if (denoiseRes) {
+      // console.log("denoiseRes:", denoiseRes);
+      const stream = denoiseRes.data;
+      const writer = fs.createWriteStream(filePath);
+      stream.pipe(writer);
+    }
+  }
+  catch (e) {
+    console.log('Cannot denoise, skip');
+  }
+
   const audioFile = await new ffmpeg(filePath);
+  // const audioFile = await new ffmpeg(denoisedPath);
   audioFile.addCommand('-y');
   audioFile.addCommand('-vn'); // disable video processing
   audioFile.addCommand('-ac', '1'); // to mono sound
@@ -141,6 +449,7 @@ async function processAudio(filePath, audioType, postProcessing = true) {
 
     const destPath = `${audioSavePath}/${Date.now()}.${audioExt}`;
 
+    console.log(`Convert to ${audioType}...`);
     await audioFile.save(destPath);
     return { path: destPath };
   } catch (e) {
@@ -226,7 +535,7 @@ async function uploadToYandexStorage(filePath) {
     }
 }
 
-async function sendAudio({audioUri, language, punctuation = true}) {
+async function sendAudioYandex({audioUri, language, punctuation = true}) {
   const langMap = {
     'ru': 'ru-RU',
     'en': 'en-US',
@@ -330,8 +639,10 @@ function saveText(chunks) {
 module.exports = {
   uploadToYandexStorage,
   processAudio,
-  sendAudio,
+  sendAudioYandex,
   // getOperation,
   checkAndSave,
-  fileToRecognize
+  fileToRecognize,
+  // fileToRecognizeYandex,
+  // fileToRecognizeWhisper,
 }

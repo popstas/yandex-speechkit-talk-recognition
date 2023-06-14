@@ -25,9 +25,11 @@
     "connect-busboy": "0.0.2",
     "express": "^4.17.1",
     "ffmpeg": "0.0.4",
+    "form-data": "^4.0.0",
     "fs-extra": "^9.1.0",
     "lowdb": "^3.0.0",
-    "nodemon": "^2.0.16"
+    "nodemon": "^2.0.16",
+    "telegraf": "^4.12.2"
   },
   "bin": {
     "yandex-stt": "index.js"
