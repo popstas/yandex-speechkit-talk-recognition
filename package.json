@@ -1,6 +1,6 @@
 {
   "name": "yandex-speechkit-talk-recognition",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Распознавание больших файлов разговоров через Yandex SpeechKit",
   "main": "index.js",
   "scripts": {
