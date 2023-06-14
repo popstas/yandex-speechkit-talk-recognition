@@ -368,37 +368,40 @@ async function processAudio(filePath, audioType, postProcessing = true) {
   await fs.statSync(filePath);
 
   // denoise remote
-  try {
-    // convert to wav
-    // TODO: тут часто напрасно конвертируется в wav,
-    // например, не проверяется живость сервиса шумоподавления
-    console.log("Convert to wav...");
-    const audioFileWav = await new ffmpeg(filePath);
-    audioFileWav.addCommand('-acodec', 'pcm_s16le');
-    audioFileWav.addCommand('-b:a', '128000');
-    audioFileWav.addCommand('-ar ', '48000');
-    audioFileWav.addCommand('-y');
-    audioFileWav.addCommand('-vn'); // disable video processing
-    audioFileWav.addCommand('-ac', '1'); // to mono sound
-    const wavPath = `${audioSavePath}/${Date.now()}_${genHash()}.wav`;
-    await audioFileWav.save(wavPath);
+  if (config.denoiseServiceUrl) {
+    try {
+      // convert to wav
+      // TODO: тут часто напрасно конвертируется в wav,
+      // например, не проверяется живость сервиса шумоподавления
+      console.log("Convert to wav...");
+      const audioFileWav = await new ffmpeg(filePath);
+      audioFileWav.addCommand('-acodec', 'pcm_s16le');
+      audioFileWav.addCommand('-b:a', '128000');
+      audioFileWav.addCommand('-ar ', '48000');
+      audioFileWav.addCommand('-y');
+      audioFileWav.addCommand('-vn'); // disable video processing
+      audioFileWav.addCommand('-ac', '1'); // to mono sound
+      const wavPath = `${audioSavePath}/${Date.now()}_${genHash()}.wav`;
+      await audioFileWav.save(wavPath);
 
-    // denoise
-    console.log("Denoise...");
-    const denoiseRes = await denoiseFile(wavPath);
-    fs.unlinkSync(wavPath); // remove temp wav
+      // denoise
+      console.log("Denoise...");
+      const denoiseRes = await denoiseFile(wavPath);
+      fs.unlinkSync(wavPath); // remove temp wav
 
-    // save file
-    if (denoiseRes) {
-      // console.log("denoiseRes:", denoiseRes);
-      const stream = denoiseRes.data;
-      const writer = fs.createWriteStream(filePath);
-      stream.pipe(writer);
+      // save file
+      if (denoiseRes) {
+        // console.log("denoiseRes:", denoiseRes);
+        const stream = denoiseRes.data;
+        const writer = fs.createWriteStream(filePath);
+        stream.pipe(writer);
+      }
+    }
+    catch (e) {
+      console.log('Cannot denoise, skip');
     }
   }
-  catch (e) {
-    console.log('Cannot denoise, skip');
-  }
+
 
   const audioFile = await new ffmpeg(filePath);
   // const audioFile = await new ffmpeg(denoisedPath);

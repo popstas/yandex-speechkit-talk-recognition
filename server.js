@@ -51,6 +51,8 @@ async function start() {
 }
 
 function initBot() {
+  if (!config.telegramBotToken) return;
+
   try {
     bot = new Telegraf(config.telegramBotToken);
     console.log('bot started');
