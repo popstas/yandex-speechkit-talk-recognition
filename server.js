@@ -57,6 +57,8 @@ function initBot() {
     bot = new Telegraf(config.telegramBotToken);
     console.log('bot started');
     bot.on([message('voice')], onVoice);
+    bot.on([message('audio')], onAudio);
+    // bot.on([message('document')], onDocument);
     bot.on([message('text')], onText);
     // bot.on('channel_post', onMessage);
     process.once('SIGINT', () => bot.stop('SIGINT'));
@@ -86,7 +88,7 @@ async function downloadFile(url, filePath) {
 
 async function downloadTelegramFile(ctx, fileId, filePath) {
   try {
-    const url = await ctx.telegram.getFileLink(ctx.message.voice.file_id);
+    const url = await ctx.telegram.getFileLink(fileId);
     await downloadFile(url.href, filePath);
     return true;
   }
@@ -207,24 +209,43 @@ async function waitOpDoneSendText(ctx, opId) {
   }, 2000);
 }
 
-async function onVoice(ctx) {
-  // console.log("ctx.message.voice:", ctx.message.voice);
-
-  const filePath = getFilenameSavePath('voice.ogg');
-  await downloadVoiceFile(ctx, ctx.message.voice.file_id, filePath);
-
+// general function
+async function onFile(ctx, filePath) {
   const resRec = await actions.fileToRecognize({
     filePath,
     provider: 'whisper',
   });
 
-  console.log("resRec:", resRec);
+  console.log("finish:", resRec);
 
   ctx.replyWithVoice(Input.fromURL(resRec.uploadedUri), {caption: getOpUrl(resRec.opId)});
 
   await waitOpDoneSendText(ctx, resRec.opId);
-
 }
+
+async function onVoice(ctx) {
+  // console.log("ctx.message.voice:", ctx.message.voice);
+  const filePath = getFilenameSavePath('voice.ogg');
+  await downloadVoiceFile(ctx, ctx.message.voice.file_id, filePath);
+
+  await onFile(ctx, filePath);
+}
+
+async function onAudio(ctx) {
+  // console.log("ctx.message.audio:", ctx.message.audio);
+  const filePath = getFilenameSavePath(ctx.message.audio.file_name);
+  await downloadVoiceFile(ctx, ctx.message.audio.file_id, filePath);
+
+  await onFile(ctx, filePath);
+}
+
+/*async function onDocument(ctx) {
+  console.log("ctx.message.document:", ctx.message.document);
+  const filePath = getFilenameSavePath(ctx.message.document.file_name);
+  await downloadVoiceFile(ctx, ctx.message.document.file_id, filePath);
+
+  await onFile(ctx, filePath);
+}*/
 
 function getOpUrl(opId) {
   return `https://talk.popstas.ru/talk/${opId}`;
