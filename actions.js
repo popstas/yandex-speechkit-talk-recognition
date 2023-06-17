@@ -223,6 +223,12 @@ async function sendAudioWhisper({mp3Path, language, prompt = ''}) {
   }
 }
 
+// uri for public serve converted files
+function getUriByPath(path) {
+  if (!path.startsWith(audioSavePath)) return false;
+  return `${process.env.ORIGIN_URL}/converted/${path.replace(`${audioSavePath}/`, '')}`;
+}
+
 async function fileToRecognizeWhisper({
   filePath,
   filename = '',
@@ -231,12 +237,14 @@ async function fileToRecognizeWhisper({
   prompt = '',
 }) {
   // convert to ogg/pcm
-  console.log(colors.yellow(`1/4 Convert to ${audioType} ` + (postProcessing ? 'with' : 'without') + ' post processing...'));
+  console.log(colors.yellow(`1/3 Convert to ${audioType} ` + (postProcessing ? 'with' : 'without') + ' post processing...'));
 
   const res = await processAudio(filePath, audioType, postProcessing);
   if (!res) return;
 
-  const uploadedUri = await uploadToYandexStorage(res.path);
+  // const uploadedUri = await uploadToYandexStorage(res.path);
+  const uploadedUri = getUriByPath(res.path);
+  // console.log("uploadedUri:", uploadedUri);
 
   if (res.error) {
     return { error: res.error };
@@ -247,22 +255,22 @@ async function fileToRecognizeWhisper({
     return { error: 'Failed to convert to mp3' };
   }
 
-  const opId = buildIdByFilePath(mp3Path);
+  // console.log(colors.yellow('2/4 Upload to Yandex...'));
+  // const mp3Uri = await uploadToYandexStorage(mp3Path);
+  const mp3Uri = getUriByPath(mp3Path);
 
+  const opId = buildIdByFilePath(mp3Path);
   if (!fs.existsSync(opsPath)) fs.mkdirSync(opsPath, { recursive: true }); // create dir
   const opPath = `${opsPath}/${opId}.json`;
-
-  console.log(colors.yellow('2/4 Upload to Yandex...'));
-  const mp3Uri = await uploadToYandexStorage(mp3Path);
 
   let chunks = [];
   let done = false;
 
   // upload to Whisper
-  console.log(colors.yellow(`3/4 Recognize with Whisper, language: ${language}, prompt: ${prompt}...`));
+  console.log(colors.yellow(`2/3 Recognize with Whisper, language: ${language}, prompt: ${prompt}...`));
   sendAudioWhisper({mp3Path, language, prompt}).then(whRes => {
     done = true;
-    console.log(colors.yellow('4/4 Save recognized text...'));
+    console.log(colors.yellow('3/3 Save recognized text...'));
     // console.log("whRes:", whRes);
     if (whRes.error) {
       fs.writeFileSync(opPath, JSON.stringify({
