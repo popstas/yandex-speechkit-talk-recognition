@@ -71,6 +71,7 @@ function initBot() {
 }
 
 async function downloadFile(url, filePath) {
+  // console.log("downloadFile:", url);
   const response = await axios({
     url: url,
     responseType: 'stream',
@@ -345,7 +346,11 @@ function getUploadDir() {
 
 function getFilenameSavePath(filename) {
   const uploadDir = getUploadDir();
-  return `${uploadDir}/${Date.now()}_${filename}`;
+  return `${uploadDir}/${Date.now()}_${safeFilename(filename)}`;
+}
+
+function safeFilename(filename) {
+    return filename.replace(/[^a-zа-я0-9.]/gi, '_');
 }
 
 async function upload(req, res) {
