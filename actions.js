@@ -33,69 +33,75 @@ async function fileToRecognize({
   prompt = '',
 }) {
   let resRec;
-  if (provider === 'yandex') {
-    resRec = await fileToRecognizeYandex({
-      filePath,
-      filename,
-      postProcessing,
-      language,
-      punctuation,
-    });
-    /*log({
-      id: resRec.opId,
-      status: 'converted',
-      date: new Date().toUTCString(),
-    });*/
+  try {
+    if (provider === 'yandex') {
+      resRec = await fileToRecognizeYandex({
+        filePath,
+        filename,
+        postProcessing,
+        language,
+        punctuation,
+      });
+      /*log({
+        id: resRec.opId,
+        status: 'converted',
+        date: new Date().toUTCString(),
+      });*/
 
-    if (resRec && resRec.error) {
-      return {error: resRec.error};
+      if (resRec && resRec.error) {
+        return {error: resRec.error};
+      }
+
+      const delay = 10;
+      const interval = setInterval(async () => {
+        const done = await checkAndSave(resRec.opId, resRec.uploadedUri);
+        if (done) {
+          /*log({
+            id: resRec.opId,
+            status: 'done',
+            date: new Date().toUTCString(),
+          });*/
+          clearInterval(interval);
+        }
+      }, delay * 1000);
     }
 
-    const delay = 10;
-    const interval = setInterval(async () => {
-      const done = await checkAndSave(resRec.opId, resRec.uploadedUri);
-      if (done) {
-        /*log({
-          id: resRec.opId,
-          status: 'done',
-          date: new Date().toUTCString(),
-        });*/
-        clearInterval(interval);
+    if (provider === 'whisper') {
+      if (!prompt) prompt = 'Предложение, со знаками.';
+      resRec = await fileToRecognizeWhisper({
+        filePath,
+        filename,
+        postProcessing,
+        language,
+        prompt,
+      });
+      /*log({
+        id: resRec.opId,
+        status: 'converted',
+        date: new Date().toUTCString(),
+      });*/
+
+      if (resRec && resRec.error) {
+        return {error: resRec.error};
       }
-    }, delay * 1000);
-  }
 
-  if (provider === 'whisper') {
-    if (!prompt) prompt = 'Предложение, со знаками.';
-    resRec = await fileToRecognizeWhisper({
-      filePath,
-      filename,
-      postProcessing,
-      language,
-      prompt,
-    });
-    /*log({
-      id: resRec.opId,
-      status: 'converted',
-      date: new Date().toUTCString(),
-    });*/
-
-    if (resRec && resRec.error) {
-      return {error: resRec.error};
+      /*const delay = 10;
+      const interval = setInterval(async () => {
+        const done = await actions.checkAndSave(resRec.opId, resRec.uploadedUri);
+        if (done) {
+          log({
+            id: resRec.opId,
+            status: 'done',
+            date: new Date().toUTCString(),
+          });
+          clearInterval(interval);
+        }
+      }, delay * 1000);*/
     }
-
-    /*const delay = 10;
-    const interval = setInterval(async () => {
-      const done = await actions.checkAndSave(resRec.opId, resRec.uploadedUri);
-      if (done) {
-        log({
-          id: resRec.opId,
-          status: 'done',
-          date: new Date().toUTCString(),
-        });
-        clearInterval(interval);
-      }
-    }, delay * 1000);*/
+  } catch (e) {
+    console.log('error while fileToRecognize', e.message);
+    console.log(e);
+    return {error: e.message};
   }
 
   return resRec;

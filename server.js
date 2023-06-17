@@ -40,6 +40,14 @@ function log(obj) {
   if (!fs.existsSync(destPath)) fs.symlinkSync(pathToFfmpeg, destPath);
 }*/
 
+onunhandledrejection = (reason, p) => {
+    console.log('Unhandled Rejection at:', p, 'reason:', reason);
+}
+
+process.uncaughtException = (err) => {
+    console.log('Uncaught Exception:', err);
+}
+
 async function start() {
   // await db.read();
   // db.data ||= { ops: [] };
@@ -71,12 +79,13 @@ function initBot() {
 }
 
 async function downloadFile(url, filePath) {
-  // console.log("downloadFile:", url);
+  console.log("downloadFile:", url);
   const response = await axios({
     url: url,
     responseType: 'stream',
   });
 
+  // console.log("response:", response);
   const stream = response.data;
   const writer = fs.createWriteStream(filePath);
   stream.pipe(writer);
@@ -89,11 +98,15 @@ async function downloadFile(url, filePath) {
 
 async function downloadTelegramFile(ctx, fileId, filePath) {
   try {
+    // console.log("downloadTelegramFile:", fileId);
     const url = await ctx.telegram.getFileLink(fileId);
+    // console.log("telegram url:", url);
     await downloadFile(url.href, filePath);
     return true;
   }
   catch (e) {
+    console.log("downloadTelegramFile error:", fileId);
+    console.log(e);
     return false;
   }
 }
@@ -164,7 +177,7 @@ function readOpsData(opId) {
 
 async function downloadVoiceFile(ctx, fileId, filePath) {
   // download voice file to local
-  let tries = 5;
+  let tries = 2;
   return await new Promise((resolve, reject) => {
     const handler = async () => {
       ctx.telegram.sendChatAction(ctx.message.chat.id, 'upload_voice');
