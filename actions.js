@@ -12,8 +12,7 @@ axios.interceptors.request.use(request => {
   return request;
 });
 
-const audioType = config.audioType || 'ogg'; // ogg|pcm
-const audioExt = audioType == 'ogg' ? 'ogg' : 'wav';
+const audioType = config.audioType || 'ogg'; // ogg|pcm|mp3
 if (config.filters === undefined) config.filters = true;
 
 const opsPath = `${config.dataPath}/ops`;
@@ -236,21 +235,20 @@ async function fileToRecognizeWhisper({
   language = 'ru',
   prompt = '',
 }) {
+  const mp3Type = 'mp3';
   // convert to ogg/pcm
-  console.log(colors.yellow(`1/3 Convert to ${audioType} ` + (postProcessing ? 'with' : 'without') + ' post processing...'));
+  console.log(colors.yellow(`1/3 Convert to ${mp3Type} ` + (postProcessing ? 'with' : 'without') + ' post processing...'));
 
-  const res = await processAudio(filePath, audioType, postProcessing);
+  const res = await processAudio(filePath, mp3Type, postProcessing);
   if (!res) return;
-
-  // const uploadedUri = await uploadToYandexStorage(res.path);
-  const uploadedUri = getUriByPath(res.path);
-  // console.log("uploadedUri:", uploadedUri);
-
   if (res.error) {
     return { error: res.error };
   }
 
-  const mp3Path = await convertToMp3(res.path);
+  // const uploadedUri = await uploadToYandexStorage(res.path);
+  const mp3Path = res.path;
+  const uploadedUri = getUriByPath(mp3Path);
+  // console.log("uploadedUri:", uploadedUri);
   if (!mp3Path) {
     return { error: 'Failed to convert to mp3' };
   }
@@ -372,8 +370,8 @@ function s3Init() {
 }
 
 async function processAudio(filePath, audioType, postProcessing = true) {
-  if (!['ogg', 'pcm'].includes(audioType)) {
-    throw new Error('Only ogg and pcm types supported');
+  if (!['ogg', 'pcm', 'mp3'].includes(audioType)) {
+    throw new Error('Only ogg and pcm types supported, and mp3 for Whisper');
   }
 
   // console.log('filePath: ', filePath);
@@ -425,6 +423,9 @@ async function processAudio(filePath, audioType, postProcessing = true) {
   if (audioType == 'ogg') {
     audioFile.addCommand('-acodec', 'libopus');
   }
+  if (audioType == 'mp3') {
+    audioFile.addCommand('-acodec', 'libmp3lame');
+  }
   if (audioType == 'pcm') {
     audioFile.addCommand('-acodec', 'pcm_s16le');
     audioFile.addCommand('-b:a', '128000');
@@ -464,9 +465,10 @@ async function processAudio(filePath, audioType, postProcessing = true) {
     // use FFmpeg to improve audio quality - https://www.reddit.com/r/ffmpeg/comments/6y15g1/is_it_possible_to_use_ffmpeg_to_improve_audio/
     // normalize audio - https://superuser.com/questions/323119/how-can-i-normalize-audio-using-ffmpeg
 
+    const audioExt = ['ogg', 'mp3'].includes(audioType) ? audioType : 'wav';
     const destPath = `${audioSavePath}/${Date.now()}.${audioExt}`;
 
-    console.log(`Convert to ${audioType}...`);
+    console.log(`Convert to ${audioType}... save to ${destPath}`);
     await audioFile.save(destPath);
     return { path: destPath };
   } catch (e) {
