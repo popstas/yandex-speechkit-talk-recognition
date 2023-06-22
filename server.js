@@ -107,6 +107,15 @@ async function downloadTelegramFile(ctx, fileId, filePath) {
   catch (e) {
     console.log("downloadTelegramFile error:", fileId);
     console.log(e);
+
+    // known errors
+    if (e.response && e.response.error_code === 400) {
+       if (e.response.description === 'Bad Request: file is too big') {
+         ctx.reply('File is too big. File size limit is 20 MB.');
+         return -1;
+       }
+    }
+
     return false;
   }
 }
@@ -115,7 +124,7 @@ async function downloadTelegramFile(ctx, fileId, filePath) {
 function prettyText(text) {
   const paragraphs = [];
   const sentences = text.split(/\.[ \n]/g);
-  console.log("sentences:", sentences.length);
+  // console.log("sentences:", sentences.length);
   let paragraph = '';
   while (sentences.length > 0) {
     paragraph += sentences.shift() + '. ';
@@ -182,13 +191,14 @@ async function downloadVoiceFile(ctx, fileId, filePath) {
     const handler = async () => {
       ctx.telegram.sendChatAction(ctx.message.chat.id, 'upload_voice');
       const ok = await downloadTelegramFile(ctx, fileId, filePath);
-      if (ok) {
+      if (ok && ok !== -1) {
         clearInterval(interval);
         return resolve(filePath);
       } else {
         tries--;
+        if (ok === -1) tries = 0;
         if (tries <= 0) {
-          ctx.reply('Failed to get file from telegram')
+          if (ok !== -1) ctx.reply('Failed to get file from telegram')
           clearInterval(interval);
         }
         else {
@@ -230,9 +240,11 @@ async function onFile(ctx, filePath) {
     provider: 'whisper',
   });
 
-  console.log("finish:", resRec);
+  console.log("Result URL:", getOpUrl(resRec.opId));
 
   ctx.replyWithVoice(Input.fromURL(resRec.uploadedUri), {caption: getOpUrl(resRec.opId)});
+  // ctx.reply(getOpUrl(resRec.opId));
+  // ctx.replyWithVoice(Input.fromURL(resRec.uploadedUri));
 
   await waitOpDoneSendText(ctx, resRec.opId);
 }
@@ -411,7 +423,7 @@ async function upload(req, res) {
       return;
     }
 
-    const filePath = getFilenameSavePath(fieldname);;
+    const filePath = getFilenameSavePath(fieldname);
     fstream = fs.createWriteStream(filePath);
     file.pipe(fstream);
 

@@ -197,7 +197,7 @@ async function sendAudioWhisper({mp3Path, language, prompt = ''}) {
     // console.log("detect.data:", detect.data);
 
     // asr
-    console.log('send to whisper...')
+    // console.log('send to whisper...')
     const formData2 = new FormData();
     formData2.append('audio_file', fs.createReadStream(mp3Path));
     formData2.append('task', 'transcribe');
@@ -235,20 +235,22 @@ async function fileToRecognizeWhisper({
   language = 'ru',
   prompt = '',
 }) {
-  const mp3Type = 'mp3';
+  // const mp3Type = 'mp3';
   // convert to ogg/pcm
-  console.log(colors.yellow(`1/3 Convert to ${mp3Type} ` + (postProcessing ? 'with' : 'without') + ' post processing...'));
+  console.log(colors.yellow(`1/3 Convert to ${audioType} ` + (postProcessing ? 'with' : 'without') + ' post processing...'));
 
-  const res = await processAudio(filePath, mp3Type, postProcessing);
+  const res = await processAudio(filePath, audioType, postProcessing);
   if (!res) return;
   if (res.error) {
     return { error: res.error };
   }
-
   // const uploadedUri = await uploadToYandexStorage(res.path);
-  const mp3Path = res.path;
-  const uploadedUri = getUriByPath(mp3Path);
+  const uploadedUri = getUriByPath(res.path);
   // console.log("uploadedUri:", uploadedUri);
+
+  console.log("Convert to mp3...");
+  const mp3Path = await convertToMp3(res.path);
+  console.log(`Saved to ${mp3Path}`);
   if (!mp3Path) {
     return { error: 'Failed to convert to mp3' };
   }
@@ -380,12 +382,15 @@ async function processAudio(filePath, audioType, postProcessing = true) {
   await fs.statSync(filePath);
 
   // denoise remote
-  if (config.denoiseServiceUrl) {
+  if (postProcessing && config.denoiseServiceUrl) {
     try {
       // convert to wav
       // TODO: тут часто напрасно конвертируется в wav,
       // например, не проверяется живость сервиса шумоподавления
-      console.log("Convert to wav...");
+
+      const wavPath = `${audioSavePath}/${Date.now()}_${genHash()}.wav`;
+      console.log(`Convert to wav... save to ${wavPath}`);
+
       const audioFileWav = await new ffmpeg(filePath);
       audioFileWav.addCommand('-acodec', 'pcm_s16le');
       audioFileWav.addCommand('-b:a', '128000');
@@ -393,11 +398,10 @@ async function processAudio(filePath, audioType, postProcessing = true) {
       audioFileWav.addCommand('-y');
       audioFileWav.addCommand('-vn'); // disable video processing
       audioFileWav.addCommand('-ac', '1'); // to mono sound
-      const wavPath = `${audioSavePath}/${Date.now()}_${genHash()}.wav`;
       await audioFileWav.save(wavPath);
 
       // denoise
-      console.log("Denoise...");
+      console.log(`Denoise... save to ${filePath}`);
       const denoiseRes = await denoiseFile(wavPath);
       fs.unlinkSync(wavPath); // remove temp wav
 
