@@ -530,7 +530,7 @@ async function upload(req, res) {
       });
 
       if (resRec.error) {
-        return res.error(resRec.error);
+        return res.json({error: resRec.error});
       }
 
       res.json({opId: resRec.opId});
