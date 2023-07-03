@@ -79,6 +79,42 @@ function initBot() {
   }
 }
 
+async function sendTelegramMessage(chat_id, text, extraMessageParams) {
+  return new Promise((resolve) => {
+
+    const msgs = splitBigMessage(text);
+    if (msgs.length > 1) console.log(`Split into ${msgs.length} messages`);
+
+    const params = {
+      ...extraMessageParams,
+      // disable_web_page_preview: true,
+      // disable_notification: true,
+      // parse_mode: 'HTML'
+    };
+
+    msgs.forEach(async (msg) => {
+      await bot.telegram.sendMessage(chat_id, msg, params);
+    });
+    resolve(true);
+  });
+}
+
+function splitBigMessage(text) {
+  const msgs = [];
+  const sizeLimit = 4096;
+  let msg = '';
+  for (const line of text.split('\n')) {
+    if (msg.length + line.length > sizeLimit) {
+      // console.log("split msg:", msg);
+      msgs.push(msg);
+      msg = '';
+    }
+    msg += line + '\n';
+  }
+  msgs.push(msg);
+  return msgs;
+}
+
 async function downloadFile(url, filePath) {
   console.log('downloadFile:', url);
   const response = await axios({
@@ -180,7 +216,7 @@ async function onText(ctx) {
 
   // or pretty text
   const text = prettyText(ctx.message.text);
-  ctx.reply(text);
+  await sendTelegramMessage(ctx.chat.id, text);
 }
 
 function readOpsData(opId) {
@@ -252,11 +288,12 @@ async function waitOpDoneSendText(ctx, opId) {
 
         const tasks = detectTasks(text);
         if (tasks.length > 0) {
-          ctx.reply(
-              `Задачи:\n\n${tasks.map((task) => `- ${task}`).join('\n')}`);
+          const text = `Задачи:\n\n${tasks.map((task) => `- ${task}`).
+              join('\n')}`;
+          sendTelegramMessage(ctx.chat.id, text);
         }
         // ctx.reply(`${prettyText(text)}\n\n${getOpUrl(opId)}`);
-        ctx.reply(processText(text));
+        sendTelegramMessage(ctx.chat.id, processText(text));
       }
 
     } catch (e) {
