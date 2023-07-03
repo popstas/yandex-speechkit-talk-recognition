@@ -123,7 +123,7 @@ async function downloadTelegramFile(ctx, fileId, filePath) {
 // split text to paragraphs, when > 200 symbols in paragraph
 function prettyText(text) {
   const paragraphs = [];
-  const sentences = text.split(/\.[ \n]/g);
+  const sentences = text.split(/[.?!][ \n]/g);
   // console.log("sentences:", sentences.length);
   let paragraph = '';
   while (sentences.length > 0) {
@@ -215,6 +215,29 @@ async function downloadVoiceFile(ctx, fileId, filePath) {
   });
 }
 
+function processText(text) {
+  text = prettyText(text);
+  text = text.replace(/ +/g, ' ');
+  return text;
+}
+
+function detectTasks(text) {
+  const tasks = [];
+  // task is sentense from text begining with "Надо" or "Нужно".
+  // Parse text to tasks:
+  const sentences = text.split(/[.?!][ \n]/g);
+  for (const sentence of sentences) {
+    if (sentence.match(/^(Надо|Нужно|Нужна|Нужны) /)) {
+      // Remove begining "Надо" or "Нужно".
+      const task = sentence.replace(/^(Надо|Нужно|Нужна|Нужны) /, '');
+      // Capitalize first letter.
+      tasks.push(task.charAt(0).toUpperCase() + task.slice(1));
+    }
+  }
+
+  return tasks;
+}
+
 async function waitOpDoneSendText(ctx, opId) {
   const interval = setInterval(() => {
     try {
@@ -227,8 +250,13 @@ async function waitOpDoneSendText(ctx, opId) {
           return chunk.alternatives[0].text.trim();
         }).join(' ').replace(/ +/g, ' ');
 
+        const tasks = detectTasks(text);
+        if (tasks.length > 0) {
+          ctx.reply(
+              `Задачи:\n\n${tasks.map((task) => `- ${task}`).join('\n')}`);
+        }
         // ctx.reply(`${prettyText(text)}\n\n${getOpUrl(opId)}`);
-        ctx.reply(prettyText(text));
+        ctx.reply(processText(text));
       }
 
     } catch (e) {
