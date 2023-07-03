@@ -1,18 +1,18 @@
-const express = require("express");
+const express = require('express');
 const app = express();
-const bodyParser = require("body-parser");
-const http = require("http").createServer(app);
+const bodyParser = require('body-parser');
+const http = require('http').createServer(app);
 const busboy = require('connect-busboy'); //middleware for form/file upload
 const actions = require('./actions');
 const fs = require('fs-extra');
 const axios = require('axios');
 const config = require('./config');
 const path = require('path');
-const packageJson = require("./package.json");
+const packageJson = require('./package.json');
 // const { Low, JSONFile } = require('lowdb');
 
-const { Telegraf, Input } = require('telegraf');
-const { message, editedMessage } = require('telegraf/filters');
+const {Telegraf, Input} = require('telegraf');
+const {message, editedMessage} = require('telegraf/filters');
 
 axios.defaults.headers.common['Authorization'] = 'Api-Key ' + config.apiKey;
 
@@ -24,7 +24,7 @@ const opsPath = config.dataPath + '/ops';
 // let ops;
 
 let bot;
-start();
+void start();
 
 function log(obj) {
   console.log(obj);
@@ -41,12 +41,13 @@ function log(obj) {
 }*/
 
 onunhandledrejection = (reason, p) => {
-    console.log('Unhandled Rejection at:', p, 'reason:', reason);
-}
+  console.log('Unhandled Rejection at:', p, 'reason:', reason);
+};
 
-process.uncaughtException = (err) => {
-    console.log('Uncaught Exception:', err);
-}
+process.uncaughtException = (error, source) => {
+  console.error('Uncaught Exception:', error);
+  console.error('Source:', source);
+};
 
 async function start() {
   // await db.read();
@@ -79,7 +80,7 @@ function initBot() {
 }
 
 async function downloadFile(url, filePath) {
-  console.log("downloadFile:", url);
+  console.log('downloadFile:', url);
   const response = await axios({
     url: url,
     responseType: 'stream',
@@ -103,17 +104,16 @@ async function downloadTelegramFile(ctx, fileId, filePath) {
     // console.log("telegram url:", url);
     await downloadFile(url.href, filePath);
     return true;
-  }
-  catch (e) {
-    console.log("downloadTelegramFile error:", fileId);
+  } catch (e) {
+    console.log('downloadTelegramFile error:', fileId);
     console.log(e);
 
     // known errors
     if (e.response && e.response.error_code === 400) {
-       if (e.response.description === 'Bad Request: file is too big') {
-         ctx.reply('File is too big. File size limit is 20 MB.');
-         return -1;
-       }
+      if (e.response.description === 'Bad Request: file is too big') {
+        ctx.reply('File is too big. File size limit is 20 MB.');
+        return -1;
+      }
     }
 
     return false;
@@ -145,10 +145,12 @@ function prettyText(text) {
   return prettyText;
 }
 
-
 async function onText(ctx) {
+
+  // recognize last with prompt
   if (ctx.message.reply_to_message) {
-    const text = ctx.message.reply_to_message.caption || ctx.message.reply_to_message.text;
+    const text = ctx.message.reply_to_message.caption ||
+        ctx.message.reply_to_message.text;
     // console.log("text:", text);
     const opId = getOpIdByText(text);
     // console.log("opId:", opId);
@@ -175,6 +177,8 @@ async function onText(ctx) {
     await waitOpDoneSendText(ctx, resRec.opId);
     return;
   }
+
+  // or pretty text
   const text = prettyText(ctx.message.text);
   ctx.reply(text);
 }
@@ -198,11 +202,11 @@ async function downloadVoiceFile(ctx, fileId, filePath) {
         tries--;
         if (ok === -1) tries = 0;
         if (tries <= 0) {
-          if (ok !== -1) ctx.reply('Failed to get file from telegram')
+          if (ok !== -1) ctx.reply('Failed to get file from telegram');
           clearInterval(interval);
-        }
-        else {
-          ctx.reply('Failed to get file from telegram, next repeat after 5 secs...')
+        } else {
+          ctx.reply(
+              'Failed to get file from telegram, next repeat after 5 secs...');
         }
       }
     };
@@ -228,7 +232,7 @@ async function waitOpDoneSendText(ctx, opId) {
       }
 
     } catch (e) {
-      console.log("Check failed:", e);
+      console.log('Check failed:', e);
     }
   }, 2000);
 }
@@ -240,9 +244,10 @@ async function onFile(ctx, filePath) {
     provider: 'whisper',
   });
 
-  console.log("Result URL:", getOpUrl(resRec.opId));
+  console.log('Result URL:', getOpUrl(resRec.opId));
 
-  ctx.replyWithVoice(Input.fromURL(resRec.uploadedUri), {caption: getOpUrl(resRec.opId)});
+  ctx.replyWithVoice(Input.fromURL(resRec.uploadedUri),
+      {caption: getOpUrl(resRec.opId)});
   // ctx.reply(getOpUrl(resRec.opId));
   // ctx.replyWithVoice(Input.fromURL(resRec.uploadedUri));
 
@@ -276,6 +281,7 @@ async function onAudio(ctx) {
 function getOpUrl(opId) {
   return `https://talk.popstas.ru/talk/${opId}`;
 }
+
 function getOpIdByText(text) {
   const match = text.match(/\/talk\/([a-z0-9]+)/);
   if (match) {
@@ -285,24 +291,24 @@ function getOpIdByText(text) {
 
 function initExpress(app) {
   // CORS
-  app.use(function (req, res, next) {
-    res.header("Access-Control-Allow-Origin", "*");
+  app.use(function(req, res, next) {
+    res.header('Access-Control-Allow-Origin', '*');
     res.header(
-      "Access-Control-Allow-Headers",
-      "Origin, X-Requested-With, Content-Type, Accept"
+        'Access-Control-Allow-Headers',
+        'Origin, X-Requested-With, Content-Type, Accept',
     );
     next();
   });
 
   app.use(bodyParser.json());
-  app.use(bodyParser.urlencoded({ extended: true }));
+  app.use(bodyParser.urlencoded({extended: true}));
 
   app.use(busboy());
 
   // better serve with nginx
-  app.use("/ops", express.static(opsPath));
+  app.use('/ops', express.static(opsPath));
 
-  app.get("/", (req, res) => {
+  app.get('/', (req, res) => {
     res.json({
       version: packageJson.version,
       whisper: true,
@@ -315,7 +321,7 @@ function initExpress(app) {
     res.send({ items });
   });*/
 
-  app.post("/upload", upload);
+  app.post('/upload', upload);
 
   const port = process.env.PORT || 5771;
   http.listen(port, () => {
@@ -365,7 +371,7 @@ function initExpress(app) {
 
 function getUploadDir() {
   const uploadDir = path.normalize(`${config.dataPath}/upload`);
-  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, {recursive: true});
   return uploadDir;
 }
 
@@ -375,7 +381,7 @@ function getFilenameSavePath(filename) {
 }
 
 function safeFilename(filename) {
-    return filename.replace(/[^a-zа-я0-9.]/gi, '_');
+  return filename.replace(/[^a-zа-я0-9.]/gi, '_');
 }
 
 async function upload(req, res) {
@@ -392,29 +398,37 @@ async function upload(req, res) {
   req.busboy.on('field', (name, val, info) => {
     if (name === 'postProcessing') {
       postProcessing = val == 'true';
-      console.log("postProcessing: ", postProcessing);
+      console.log('postProcessing: ', postProcessing);
     }
     if (name === 'language') {
       language = val;
-      console.log("language: ", language);
+      console.log('language: ', language);
     }
     if (name === 'punctuation') {
       punctuation = val == 'true';
-      console.log("punctuation: ", punctuation);
+      console.log('punctuation: ', punctuation);
     }
     if (name === 'provider') {
       provider = val;
-      console.log("provider: ", provider);
+      console.log('provider: ', provider);
     }
     if (name === 'prompt' && val) {
       prompt = val;
     }
   });
 
-  req.busboy.on('file', function (fieldname, file, filename) {
-    console.log("Uploading: " + filename);
+  req.busboy.on('file', function(fieldname, file, filename) {
+    console.log('Uploading: ' + filename);
 
-    const allowedExt = ['mp3', 'wav', 'ogg', 'opus', 'aac', 'm4a', 'mp4', 'mkv'];
+    const allowedExt = [
+      'mp3',
+      'wav',
+      'ogg',
+      'opus',
+      'aac',
+      'm4a',
+      'mp4',
+      'mkv'];
     const regex = new RegExp('\.(' + allowedExt.join('|') + ')$');
     if (!regex.test(filename)) {
       const msg = 'Unknown file format, allowed: ' + allowedExt.join(', ');
@@ -428,8 +442,8 @@ async function upload(req, res) {
     file.pipe(fstream);
 
     // after upload file
-    fstream.on('close', async function () {
-      console.log("Upload Finished of " + filename);
+    fstream.on('close', async function() {
+      console.log('Upload Finished of ' + filename);
 
       const resRec = await actions.fileToRecognize({
         filePath,
@@ -447,5 +461,5 @@ async function upload(req, res) {
 
       res.json({opId: resRec.opId});
     });
-  })
+  });
 };
