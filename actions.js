@@ -250,10 +250,10 @@ async function fileToRecognizeWhisper({
 
   console.log("Convert to mp3...");
   const mp3Path = await convertToMp3(res.path);
-  console.log(`Saved to ${mp3Path}`);
   if (!mp3Path) {
-    return { error: 'Failed to convert to mp3' };
+    return { error: 'Failed to convert to mp3, possible empty file.' };
   }
+  console.log(`Saved to ${mp3Path}`);
 
   // console.log(colors.yellow('2/4 Upload to Yandex...'));
   // const mp3Uri = await uploadToYandexStorage(mp3Path);
@@ -484,12 +484,17 @@ async function processAudio(filePath, audioType, postProcessing = true) {
 }
 
 async function convertToMp3(filePath) {
-  const audioFile = await new ffmpeg(filePath);
-  audioFile.addCommand('-y');
-  audioFile.addCommand('-acodec', 'libmp3lame');
-  const destPath = filePath.replace(/\.(ogg|wav)$/, '.mp3');
-  await audioFile.save(destPath);
-  return destPath;
+  try {
+    const audioFile = await new ffmpeg(filePath);
+    audioFile.addCommand('-y');
+    audioFile.addCommand('-acodec', 'libmp3lame');
+    const destPath = filePath.replace(/\.(ogg|wav)$/, '.mp3');
+    await audioFile.save(destPath);
+    return destPath;
+  } catch (e) {
+    console.error(`Failed to convert ${filePath} to mp3: ` + e);
+    return null;
+  }
 }
 
 async function uploadToYandexStorage(filePath) {

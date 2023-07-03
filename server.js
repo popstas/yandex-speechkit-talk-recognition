@@ -207,6 +207,11 @@ async function onText(ctx) {
       provider: 'whisper',
       prompt,
     });
+
+    if (resRec && resRec.error) {
+      return ctx.reply(`Error: ${resRec.error}`);
+    }
+
     // console.log("resRec:", resRec);
     // ctx.replyWithVoice(Input.fromURL(resRec.uploadedUri), {caption: getOpUrl(resRec.opId)});
 
@@ -308,6 +313,10 @@ async function onFile(ctx, filePath) {
     filePath,
     provider: 'whisper',
   });
+
+  if (resRec && resRec.error) {
+    return ctx.reply(`Error: ${resRec.error}`);
+  }
 
   console.log('Result URL:', getOpUrl(resRec.opId));
 
