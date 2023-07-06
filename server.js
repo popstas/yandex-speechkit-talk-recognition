@@ -220,6 +220,7 @@ async function onText(ctx) {
   }
 
   // or pretty text
+  detectAndSendTasks(ctx.message.text, ctx);
   const text = prettyText(ctx.message.text);
   await sendTelegramMessage(ctx.chat.id, text);
 }
@@ -268,15 +269,24 @@ function detectTasks(text) {
   // Parse text to tasks:
   const sentences = text.split(/[.?!][ \n]/g);
   for (const sentence of sentences) {
-    if (sentence.match(/^(Надо|Нужно|Нужна|Нужны) /)) {
+    const reg = new RegExp('^(Надо( заметить(, что)?)?|Нужно|Нужна|Нужны|Надо|Тезис),? ');
+    if (reg.test(sentence)) {
       // Remove begining "Надо" or "Нужно".
-      const task = sentence.replace(/^(Надо|Нужно|Нужна|Нужны) /, '');
+      const task = sentence.replace(reg, '');
       // Capitalize first letter.
       tasks.push(task.charAt(0).toUpperCase() + task.slice(1));
     }
   }
 
   return tasks;
+}
+
+function detectAndSendTasks(text, ctx) {
+  const tasks = detectTasks(text);
+  if (tasks.length > 0) {
+    const text = `Задачи:\n\n${tasks.map((task) => `- ${task}`).join('\n')}`;
+    void sendTelegramMessage(ctx.chat.id, text);
+  }
 }
 
 async function waitOpDoneSendText(ctx, opId) {
@@ -287,16 +297,13 @@ async function waitOpDoneSendText(ctx, opId) {
       const json = readOpsData(opId);
       if (json.done) {
         clearInterval(interval);
+
         const text = json.chunks.map(chunk => {
           return chunk.alternatives[0].text.trim();
         }).join(' ').replace(/ +/g, ' ');
 
-        const tasks = detectTasks(text);
-        if (tasks.length > 0) {
-          const text = `Задачи:\n\n${tasks.map((task) => `- ${task}`).
-              join('\n')}`;
-          sendTelegramMessage(ctx.chat.id, text);
-        }
+        detectAndSendTasks(text, ctx);
+
         // ctx.reply(`${prettyText(text)}\n\n${getOpUrl(opId)}`);
         sendTelegramMessage(ctx.chat.id, processText(text));
       }
