@@ -269,7 +269,7 @@ function detectTasks(text) {
   // Parse text to tasks:
   const sentences = text.split(/[.?!][ \n]/g);
   for (const sentence of sentences) {
-    const reg = new RegExp('^(Надо( заметить(, что)?)?|Нужно|Нужна|Нужны|Надо|Тезис),? ');
+    const reg = new RegExp('^(Надо( заметить(, что)?)?|Нужно|Нужна|Нужны|Надо|Тезис|Дезис),? ');
     if (reg.test(sentence)) {
       // Remove begining "Надо" or "Нужно".
       const task = sentence.replace(reg, '');
