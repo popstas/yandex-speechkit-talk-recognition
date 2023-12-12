@@ -267,7 +267,8 @@ function detectTasks(text) {
   const tasks = [];
   // task is sentense from text begining with "Надо" or "Нужно".
   // Parse text to tasks:
-  const sentences = text.split(/[.?!][ \n]/g);
+  const replacedText = text.replace(/(Тезис|Дезис)\./g, '$1,');
+  const sentences = replacedText.split(/[.?!][ \n]/g);
   for (const sentence of sentences) {
     const reg = new RegExp('^(Надо( заметить(, что)?)?|Нужно|Нужна|Нужны|Надо|Тезис|Дезис),? ');
     if (reg.test(sentence)) {
@@ -503,6 +504,7 @@ async function upload(req, res) {
 
     const allowedExt = [
       'mp3',
+      'mpeg',
       'wav',
       'ogg',
       'opus',
