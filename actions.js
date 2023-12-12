@@ -271,7 +271,7 @@ async function fileToRecognizeWhisper({
   sendAudioWhisper({mp3Path, language, prompt}).then(whRes => {
     done = true;
     console.log(colors.yellow('3/3 Save recognized text...'));
-    // console.log("whRes:", whRes);
+    console.log("whRes:", whRes);
     if (whRes.error) {
       fs.writeFileSync(opPath, JSON.stringify({
         id: `${opId}`,

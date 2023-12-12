@@ -512,7 +512,7 @@ async function upload(req, res) {
       'm4a',
       'mp4',
       'mkv'];
-    const regex = new RegExp('\.(' + allowedExt.join('|') + ')$');
+    const regex = new RegExp('\.(' + allowedExt.join('|') + ')$', 'i');
     if (!regex.test(filename)) {
       const msg = 'Unknown file format, allowed: ' + allowedExt.join(', ');
       console.log(msg);
