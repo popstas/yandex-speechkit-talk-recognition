@@ -60,7 +60,10 @@ async function start() {
 }
 
 function initBot() {
-  if (!config.telegramBotToken) return;
+  if (!config.telegramBotToken) {
+    console.log("telegramBotToken is not defined");
+    return;
+  }
 
   try {
     bot = new Telegraf(config.telegramBotToken);
@@ -72,6 +75,11 @@ function initBot() {
     // bot.on('channel_post', onMessage);
     process.once('SIGINT', () => bot.stop('SIGINT'));
     process.once('SIGTERM', () => bot.stop('SIGTERM'));
+
+    bot.catch((err) => {
+      console.error(err);
+    });
+
     bot.launch();
   } catch (e) {
     console.log('restart after 5 seconds...');
@@ -243,8 +251,13 @@ async function downloadVoiceFile(ctx, fileId, filePath) {
       } else {
         tries--;
         if (ok === -1) tries = 0;
+        // console.log("tries:", tries);
         if (tries <= 0) {
-          if (ok !== -1) ctx.reply('Failed to get file from telegram');
+          const msg = ok === -1 ?
+              'Failed to get file from telegram, aborting, wait for 90 seconds...' :
+              'Failed to get file from telegram, aborting.';
+          console.error(msg);
+          setTimeout(() => { ctx.reply(msg); }, 100);
           clearInterval(interval);
         } else {
           ctx.reply(

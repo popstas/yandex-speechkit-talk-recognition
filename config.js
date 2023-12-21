@@ -43,4 +43,5 @@ for (let envName in envMap) {
     config[confName] = !!config[confName];
   }
 }
+// console.log("config:", config);
 module.exports = config;
