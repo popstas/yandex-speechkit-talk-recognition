@@ -18,6 +18,11 @@ axios.defaults.headers.common['Authorization'] = 'Api-Key ' + config.apiKey;
 
 const opsPath = config.dataPath + '/ops';
 
+process.on('uncaughtException', (error, source) => {
+  console.log('Uncaught Exception:', error)
+  console.log('source:', source)
+})
+
 // init log db
 // const adapter = new JSONFile(`${config.dataPath}/ops.json`);
 // const db = new Low(adapter);
@@ -30,6 +35,11 @@ function log(obj) {
   console.log(obj);
   // ops.push(obj);
   // db.write();
+}
+
+function logUser(ctx, handler) {
+  const username = ctx.from?.username || ctx.from?.id || 'unknown';
+  console.log(`[${handler}] User: ${username}`);
 }
 
 // initFfmpeg();
@@ -190,6 +200,7 @@ function prettyText(text) {
 }
 
 async function onText(ctx) {
+  logUser(ctx, 'onText');
 
   // recognize last with prompt
   if (ctx.message.reply_to_message) {
@@ -304,7 +315,7 @@ function detectAndSendTasks(text, ctx) {
 }
 
 async function waitOpDoneSendText(ctx, opId) {
-  const interval = setInterval(() => {
+  const interval = setInterval(async () => {
     try {
       ctx.telegram.sendChatAction(ctx.message.chat.id, 'typing');
 
@@ -323,6 +334,8 @@ async function waitOpDoneSendText(ctx, opId) {
       }
 
     } catch (e) {
+      // Stop typing on error
+      await ctx.persistentChatAction('typing', async () => {})
       console.log('Check failed:', e);
     }
   }, 2000);
@@ -350,6 +363,7 @@ async function onFile(ctx, filePath) {
 }
 
 async function onVoice(ctx) {
+  logUser(ctx, 'onVoice');
   // console.log("ctx.message.voice:", ctx.message.voice);
   const filePath = getFilenameSavePath('voice.ogg');
   await downloadVoiceFile(ctx, ctx.message.voice.file_id, filePath);
@@ -358,6 +372,7 @@ async function onVoice(ctx) {
 }
 
 async function onAudio(ctx) {
+  logUser(ctx, 'onAudio');
   // console.log("ctx.message.audio:", ctx.message.audio);
   const filePath = getFilenameSavePath(ctx.message.audio.file_name);
   await downloadVoiceFile(ctx, ctx.message.audio.file_id, filePath);
@@ -419,7 +434,7 @@ function initExpress(app) {
   app.post('/upload', upload);
 
   const port = process.env.PORT || 5771;
-  http.listen(port, () => {
+  http.listen(port, '0.0.0.0', () => {
     console.log(`Listening at http://localhost:${port}`);
   });
 }
