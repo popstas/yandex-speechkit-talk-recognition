@@ -38,8 +38,27 @@ function log(obj) {
 }
 
 function logUser(ctx, handler) {
-  const username = ctx.from?.username || ctx.from?.id || 'unknown';
-  console.log(`[${handler}] User: ${username}`);
+  const from = ctx.from || {};
+  const chat = ctx.chat || {};
+  const username = from.username || 'no username';
+  const firstName = from.first_name || 'no first name';
+  const lastName = from.last_name || '';
+  const userId = from.id || 'unknown';
+  const isBot = from.is_bot ? 'bot' : 'user';
+  const languageCode = from.language_code || 'no lang';
+  const chatId = chat.id || 'no chat';
+  const chatType = chat.type || 'no type';
+  
+  const userInfo = [
+    `ID: ${userId}`,
+    `@${username}`,
+    `Name: ${firstName}${lastName ? ' ' + lastName : ''}`,
+    `Type: ${isBot}`,
+    `Lang: ${languageCode}`,
+    `Chat: ${chatId} (${chatType})`
+  ].join(' | ');
+  
+  console.log(`[${handler}] User: ${userInfo}`);
 }
 
 // initFfmpeg();
