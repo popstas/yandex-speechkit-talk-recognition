@@ -32,7 +32,8 @@ const envMap = {
   WHISPER_ASR_MODEL: 'whisperAsrModel',
 
   TELEGRAM_BOT_TOKEN: 'telegramBotToken',
-  DENOISE_SERVICE_URL: 'denoiseServiceUrl'
+  DENOISE_SERVICE_URL: 'denoiseServiceUrl',
+  PROXY_URL: 'proxyUrl'
 }
 for (let envName in envMap) {
   const confName = envMap[envName];

@@ -11,4 +11,5 @@ module.exports = {
 
   telegramBotToken: '',
   denoiseServiceUrl: 'http://url-to-denoise-audio-endpoint',
+  proxyUrl: '', // proxy for Telegram API calls (e.g. http://proxy:8080 or socks5://proxy:1080)
 }

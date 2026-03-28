@@ -208,7 +208,7 @@ async function sendAudioWhisper({mp3Path, language, prompt = ''}) {
 
     // console.log("formData2:", formData2);
     const res = await axios.post(
-        config.whisperBaseUrl + '/asr?output=json&word_timestamps=true&initial_prompt=' + encodeURIComponent(prompt),
+        config.whisperBaseUrl + '/asr?output=json&word_timestamps=true&vad_filter=1&initial_prompt=' + encodeURIComponent(prompt),
         formData2,
         { headers: formData2.getHeaders() }
     );
@@ -268,10 +268,15 @@ async function fileToRecognizeWhisper({
 
   // upload to Whisper
   console.log(colors.yellow(`2/3 Recognize with Whisper, language: ${language}, prompt: ${prompt}...`));
+  const started = Date.now();
   sendAudioWhisper({mp3Path, language, prompt}).then(whRes => {
     done = true;
+    const elapsed = Date.now() - started;
     console.log(colors.yellow('3/3 Save recognized text...'));
-    console.log("whRes:", whRes);
+    // console.log("whRes:", whRes);
+    const whResClean = {...whRes, segments: whRes.segments.length};
+    // console.log("whRes:", whResClean);
+    console.log("elapsed, ms:", elapsed);
     if (whRes.error) {
       fs.writeFileSync(opPath, JSON.stringify({
         id: `${opId}`,
@@ -291,7 +296,7 @@ async function fileToRecognizeWhisper({
     chunks = whRes.segments.map(s => {
       if (Array.isArray(s)) {
         // faster-whisper
-        const [start, end, text] = s;
+        const [num, unknown_arg, start, end, text] = s;
         data.start = start;
         data.end = end;
         data.text = text;

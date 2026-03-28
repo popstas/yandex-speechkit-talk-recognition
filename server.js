@@ -95,7 +95,12 @@ function initBot() {
   }
 
   try {
-    bot = new Telegraf(config.telegramBotToken);
+    const opts = {};
+    if (config.proxyUrl) {
+      const { HttpsProxyAgent } = require('https-proxy-agent');
+      opts.telegram = { agent: new HttpsProxyAgent(config.proxyUrl) };
+    }
+    bot = new Telegraf(config.telegramBotToken, opts);
     console.log('bot started');
     bot.on([message('voice')], onVoice);
     bot.on([message('audio')], onAudio);
@@ -111,6 +116,7 @@ function initBot() {
 
     bot.launch();
   } catch (e) {
+    console.log(e);
     console.log('restart after 5 seconds...');
     setTimeout(initBot, 5000);
   }
@@ -152,12 +158,17 @@ function splitBigMessage(text) {
   return msgs;
 }
 
-async function downloadFile(url, filePath) {
+async function downloadFile(url, filePath, opts = {}) {
   console.log('downloadFile:', url);
-  const response = await axios({
+  const axiosOpts = {
     url: url,
     responseType: 'stream',
-  });
+  };
+  if (opts.httpsAgent) {
+    axiosOpts.httpsAgent = opts.httpsAgent;
+    axiosOpts.httpAgent = opts.httpsAgent;
+  }
+  const response = await axios(axiosOpts);
 
   // console.log("response:", response);
   const stream = response.data;
@@ -175,7 +186,12 @@ async function downloadTelegramFile(ctx, fileId, filePath) {
     // console.log("downloadTelegramFile:", fileId);
     const url = await ctx.telegram.getFileLink(fileId);
     // console.log("telegram url:", url);
-    await downloadFile(url.href, filePath);
+    const dlOpts = {};
+    if (config.proxyUrl) {
+      const { HttpsProxyAgent } = require('https-proxy-agent');
+      dlOpts.httpsAgent = new HttpsProxyAgent(config.proxyUrl);
+    }
+    await downloadFile(url.href, filePath, dlOpts);
     return true;
   } catch (e) {
     console.log('downloadTelegramFile error:', fileId);
@@ -373,7 +389,11 @@ async function onFile(ctx, filePath) {
 
   console.log('Result URL:', getOpUrl(resRec.opId));
 
-  ctx.replyWithVoice(Input.fromURL(resRec.uploadedUri),
+  const voiceLocalPath = resRec.uploadedUri.replace(
+      `${process.env.ORIGIN_URL}/converted/`,
+      `${config.dataPath}/converted/`
+  );
+  ctx.replyWithVoice(Input.fromLocalFile(voiceLocalPath),
       {caption: getOpUrl(resRec.opId)});
   // ctx.reply(getOpUrl(resRec.opId));
   // ctx.replyWithVoice(Input.fromURL(resRec.uploadedUri));
