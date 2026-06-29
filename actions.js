@@ -457,7 +457,7 @@ async function processAudio(filePath, audioType, postProcessing = true) {
     if (postProcessing && config.filterSilence) {
       const args = [
         // 'start_periods=1:start_duration=1',
-        'stop_periods=-1:stop_duration=1:stop_threshold=-42dB', // 41 - too small
+        'stop_periods=-1:stop_duration=2:stop_threshold=-42dB', // keep 2s pause so whisper won't merge sentences; -41dB - too small
       ];
       afilters.push('silenceremove=' + args.join(':'));
     }
