@@ -1,4 +1,4 @@
-FROM node:18-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /build
 COPY package*.json ./
@@ -8,7 +8,7 @@ RUN npm install
 
 
 # stage 2
-FROM node:18-alpine
+FROM node:24-alpine
 
 RUN apk add  --no-cache ffmpeg
 
